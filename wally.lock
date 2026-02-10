@@ -5,7 +5,7 @@ registry = "test"
 [[package]]
 name = "biel/shooter"
 version = "0.1.0"
-dependencies = [["bytenet", "howmanysmall/bytenet@0.4.7"], ["fusion", "elttob/fusion@0.3.0"], ["janitor", "howmanysmall/janitor@1.18.3"], ["profilestore", "vyon/profilestore@1.0.3"], ["typed-promise", "howmanysmall/typed-promise@4.0.6"]]
+dependencies = [["bytenet", "howmanysmall/bytenet@0.4.7"], ["fusion", "elttob/fusion@0.3.0"], ["janitor", "howmanysmall/janitor@1.18.3"], ["profilestore", "vyon/profilestore@1.0.3"], ["typed-promise", "howmanysmall/typed-promise@4.0.6"], ["ui-labs", "pepeeltoro41/ui-labs@2.4.2"]]
 
 [[package]]
 name = "elttob/fusion"
@@ -31,6 +31,11 @@ dependencies = [["Promise", "howmanysmall/typed-promise@4.0.6"]]
 name = "howmanysmall/typed-promise"
 version = "4.0.6"
 dependencies = [["Promise", "evaera/promise@4.0.0"]]
+
+[[package]]
+name = "pepeeltoro41/ui-labs"
+version = "2.4.2"
+dependencies = []
 
 [[package]]
 name = "vyon/profilestore"
