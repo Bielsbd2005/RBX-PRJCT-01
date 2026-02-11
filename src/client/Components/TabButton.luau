@@ -22,7 +22,7 @@ local Constants = require(script.Parent.StoreConstants)
 
 type TabButtonProps = {
 	text: string,
-	color: Color3,
+	color: any, -- Color3 o StateObject<Color3> para reactivo
 	position: UDim2,
 	size: UDim2?,
 	layoutOrder: number?,
@@ -45,6 +45,7 @@ local function TabButton(scope: Fusion.Scope<typeof(Fusion)>, props: TabButtonPr
 
 	return scope:New "TextButton" {
 		Name = props.text,
+		AnchorPoint = Vector2.new(0.5, 0.5), -- Centrado para escalar desde el medio
 		AutoButtonColor = false,
 		BackgroundColor3 = props.color,
 		FontFace = Constants.Font,

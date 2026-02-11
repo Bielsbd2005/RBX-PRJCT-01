@@ -9,6 +9,9 @@ realm = "shared"
 profilestore = "vyon/profilestore@1.0.3"
 # Sucesor de ProfileService. Maneja el guardado de datos con Session Locking.
 
+replicaservice = "brittonfischer/replicaservice@0.1.0"
+# Replicación selectiva de estado servidor → cliente.
+
 # --- NETWORKING (RENDIMIENTO EXTREMO) ---
 bytenet = "howmanysmall/bytenet@0.4.7"
 

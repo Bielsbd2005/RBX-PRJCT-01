@@ -14,8 +14,9 @@ StoreConstants.Colors = {
 	CardStroke = Color3.fromRGB(131, 131, 131),
 	CloseBase = Color3.fromRGB(202, 44, 73),
 	CloseTop = Color3.fromRGB(255, 63, 77),
-	TabCosmetics = Color3.fromRGB(54, 54, 76),
-	TabArsenal = Color3.fromRGB(85, 126, 239),
+	TabActive = Color3.fromRGB(85, 126, 239),
+	TabInactive = Color3.fromRGB(54, 54, 76),
+	NavOptionActive = Color3.fromRGB(85, 126, 239),
 }
 
 -- Fuente principal
@@ -29,6 +30,7 @@ StoreConstants.Font = Font.new(
 StoreConstants.Assets = {
 	CardTexture = "rbxassetid://71136216021149",
 	CurrencyIcon = "rbxassetid://96222277892751",
+	LockIcon = "rbxassetid://121709682417919",
 	Placeholder = "rbxasset://textures/ui/GuiImagePlaceholder.png",
 }
 
@@ -37,14 +39,26 @@ StoreConstants.Tabs = {
 	{
 		Name = "Arsenal",
 		Text = "ARSENAL",
-		Color = Color3.fromRGB(85, 126, 239),
 		LayoutOrder = 1,
 	},
 	{
 		Name = "Cosmetics",
 		Text = "COSMETICS",
-		Color = Color3.fromRGB(54, 54, 76),
 		LayoutOrder = 2,
+	},
+}
+
+-- Opciones de navegación por tab
+StoreConstants.NavOptions = {
+	Arsenal = {
+		{ Name = "Weapons",     Image = "rbxassetid://86111407632869", Title = "Weapons" },
+		{ Name = "WeaponSkins", Image = "rbxassetid://86111407632869", Title = "Weapon Skins" },
+		{ Name = "KillEffects", Image = "rbxassetid://86111407632869", Title = "Kill Effects" },
+	},
+	Cosmetics = {
+		{ Name = "Hats",  Image = "rbxassetid://86111407632869", Title = "Hats" },
+		{ Name = "Faces", Image = "rbxassetid://86111407632869", Title = "Faces" },
+		{ Name = "Body",  Image = "rbxassetid://86111407632869", Title = "Body" },
 	},
 }
 

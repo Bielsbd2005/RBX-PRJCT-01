@@ -38,8 +38,10 @@ local function CloseButton(scope: Fusion.Scope<typeof(Fusion)>, props: CloseButt
 	end), 40, 0.5)
 	return scope:New "ImageButton" {
 		Name = "Close",
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = Constants.Colors.CloseBase,
-		Position = props.position or UDim2.fromScale(0.946, 0.08),
+		-- Ajustado posición para AnchorPoint 0.5 y alineado con Tabs (Y = 0.1455)
+		Position = props.position or UDim2.fromScale(0.9665, 0.1455),
 		Size = props.size or UDim2.fromScale(0.041, 0.07),
 
 		[OnEvent "Activated"] = props.onClose,
