@@ -815,13 +815,56 @@ local function createDataPanel(scope)
 						TextXAlignment = Enum.TextXAlignment.Left,
 					},
 
+					-- Botón de Reset
+					scope:New "TextButton" {
+						Name = "ResetBtn",
+						AnchorPoint = Vector2.new(1, 0.5),
+						BackgroundColor3 = Colors.Red,
+						Position = UDim2.new(1, -12, 0.5, 0),
+						Size = UDim2.fromOffset(110, 24),
+						FontFace = FONT_UI_BOLD,
+						Text = "⚠️ RESET DEFAULT",
+						TextColor3 = Color3.new(1, 1, 1),
+						TextSize = 11,
+						AutoButtonColor = false,
+						Visible = Computed(scope, function(use)
+							return use(selectedPlayerId) ~= nil
+						end),
+
+						[OnEvent "Activated"] = function()
+							local userId = peek(selectedPlayerId)
+							if not userId then return end
+
+							-- Simple confirm logic via status message for now
+							statusMessage:set("Reseteando datos...")
+							statusColor:set(Colors.Yellow)
+
+							local resetDataRF = adminFolder:WaitForChild("ResetData", 5)
+							if resetDataRF then
+								local ok, msg = resetDataRF:InvokeServer(userId)
+								if ok then
+									statusMessage:set("✓ " .. msg)
+									statusColor:set(Colors.Green)
+									loadPlayerData(userId)
+								else
+									statusMessage:set("✗ " .. tostring(msg))
+									statusColor:set(Colors.Red)
+								end
+							end
+						end,
+
+						[Children] = {
+							scope:New "UICorner" { CornerRadius = UDim.new(0, 4) },
+						},
+					},
+
 					-- Status message
 					scope:New "TextLabel" {
 						Name = "Status",
 						BackgroundTransparency = 1,
 						FontFace = FONT_MONO,
 						AnchorPoint = Vector2.new(1, 0),
-						Position = UDim2.new(1, -16, 0, 0),
+						Position = UDim2.new(1, -135, 0, 0), -- Moved left of button
 						Size = UDim2.new(0.4, 0, 1, 0),
 						Text = statusMessage,
 						TextColor3 = statusColor,

@@ -156,4 +156,41 @@ updateDataRF.OnServerInvoke = function(player: Player, targetUserId: number, pat
 	end
 end
 
+-- RF: Resetear todos los datos de un jugador al default
+local resetDataRF = Instance.new("RemoteFunction")
+resetDataRF.Name = "ResetData"
+resetDataRF.Parent = adminFolder
+
+resetDataRF.OnServerInvoke = function(player: Player, targetUserId: number)
+	if not isAdmin(player) then
+		warn("[AdminService] Acceso denegado a", player.Name)
+		return false, "Acceso denegado"
+	end
+
+	-- Buscar al jugador
+	local targetPlayer = nil
+	for _, p in Players:GetPlayers() do
+		if p.UserId == targetUserId then
+			targetPlayer = p
+			break
+		end
+	end
+
+	if not targetPlayer then
+		return false, "Jugador no encontrado"
+	end
+
+	-- Obtener el template por defecto
+	local DataTemplate = require(ReplicatedStorage.Shared.DataTemplate)
+
+	-- Iterar y resetear cada clave principal para mantener la estructura
+	-- Usamos DataManager:Update para asegurar replicación y validación
+	for key, defaultValue in DataTemplate do
+		DataManager:Update(targetPlayer, key, deepCopy(defaultValue))
+	end
+
+	print("[AdminService]", player.Name, "trazó RESET FULL DATA para", targetPlayer.Name)
+	return true, "Datos reseteados al default"
+end
+
 print("[AdminService] Servicio de administrador cargado")

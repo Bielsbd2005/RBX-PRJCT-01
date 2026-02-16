@@ -17,6 +17,7 @@ StoreConstants.Colors = {
 	TabActive = Color3.fromRGB(85, 126, 239),
 	TabInactive = Color3.fromRGB(54, 54, 76),
 	NavOptionActive = Color3.fromRGB(85, 126, 239),
+	Selected = Color3.fromRGB(255, 255, 255),
 }
 
 -- Fuente principal
@@ -58,7 +59,7 @@ StoreConstants.NavOptions = {
 	Cosmetics = {
 		{ Name = "Hats",  Image = "rbxassetid://86111407632869", Title = "Hats" },
 		{ Name = "Faces", Image = "rbxassetid://86111407632869", Title = "Faces" },
-		{ Name = "Body",  Image = "rbxassetid://86111407632869", Title = "Body" },
+		{ Name = "Outfits", Image = "rbxassetid://86111407632869", Title = "Outfits" },
 	},
 }
 

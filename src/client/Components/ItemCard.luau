@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Fusion = require(ReplicatedStorage.Packages.fusion)
 local Children = Fusion.Children
 local OnEvent = Fusion.OnEvent
+local Computed = Fusion.Computed
 
 local Constants = require(script.Parent.StoreConstants)
 
@@ -30,6 +31,7 @@ type ItemCardProps = {
 	isEquipped: boolean?,
 	isLevelLocked: boolean?,
 	requiredLevel: number?,
+	isSelected: boolean?,
 }
 
 local function ItemCard(scope: Fusion.Scope<typeof(Fusion)>, props: ItemCardProps)
@@ -66,17 +68,34 @@ local function ItemCard(scope: Fusion.Scope<typeof(Fusion)>, props: ItemCardProp
 
 					scope:New "UIStroke" {
 						Name = "UIStroke",
-						Color = if props.isEquipped then Constants.Colors.NavOptionActive else Constants.Colors.CardStroke,
+						Color = Computed(scope, function(use)
+							local equipped = if typeof(props.isEquipped) == "table" then use(props.isEquipped) else props.isEquipped
+							local selected = if typeof(props.isSelected) == "table" then use(props.isSelected) else props.isSelected
+
+							if equipped then
+								return Constants.Colors.NavOptionActive
+							elseif selected then
+								return Constants.Colors.Selected
+							else
+								return Constants.Colors.CardStroke
+							end
+						end),
 						Thickness = 5,
-						Transparency = if props.isEquipped then 0 else 0, -- User asked for 0 transparency when selected (which is default anyway, but being explicit)
+						Transparency = Computed(scope, function(use)
+							local _equipped = if typeof(props.isEquipped) == "table" then use(props.isEquipped) else props.isEquipped
+							local _selected = if typeof(props.isSelected) == "table" then use(props.isSelected) else props.isSelected
+
+							-- return (equipped or selected) and 0 or 0 -- Keeping 0 as per user preference/default
+							return 0
+						end),
 					},
 
-					-- Icono: Moneda o Candado (Solo si no tiene el item)
-					if not props.isOwned then
+					-- Icono: Moneda o Candado (Solo si no tiene el item y NO está bloqueado por nivel, ya que level locked ocupa todo)
+					if not props.isOwned and not props.isLevelLocked then
 						scope:New "ImageLabel" {
 							Name = "CurrencyImage",
 							BackgroundTransparency = 1,
-							Image = if props.isLevelLocked then Constants.Assets.LockIcon else Constants.Assets.CurrencyIcon,
+							Image = Constants.Assets.CurrencyIcon,
 							Position = UDim2.fromScale(0.059, 0.778),
 							ScaleType = Enum.ScaleType.Fit,
 							Size = UDim2.fromScale(0.285, 0.225),
@@ -127,13 +146,17 @@ local function ItemCard(scope: Fusion.Scope<typeof(Fusion)>, props: ItemCardProp
 							Name = "Price",
 							BackgroundTransparency = 1,
 							FontFace = Constants.Font,
-							Position = UDim2.fromScale(0.42, 0.774),
-							Size = UDim2.fromScale(0.57, 0.222),
+
+							-- Si está bloqueado, ocupa todo el ancho y se centra. Si no, a la derecha del cono
+							Position = if props.isLevelLocked then UDim2.fromScale(0, 0.774) else UDim2.fromScale(0.42, 0.774),
+							Size = if props.isLevelLocked then UDim2.fromScale(1, 0.222) else UDim2.fromScale(0.57, 0.222),
+
 							Text = if props.isLevelLocked then "LEVEL " .. tostring(props.requiredLevel or 0) else props.price,
 							TextColor3 = if props.isLevelLocked then Color3.fromRGB(255, 80, 80) else Constants.Colors.White,
+
 							TextScaled = true,
 							TextWrapped = true,
-							TextXAlignment = Enum.TextXAlignment.Left,
+							TextXAlignment = if props.isLevelLocked then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left,
 							ZIndex = 2,
 
 							[Children] = {

@@ -9,7 +9,7 @@
 return {
 	level = 1,
 	xp = 0,
-	cash = 0,
+	cash = 100,
 	gems = 0,
 
 	stats = {
@@ -23,19 +23,19 @@ return {
 	inventory = {
 		KillEffects = {},
 		Faces = {},
-		Body = {},
+		Outfits = { "Default" },
 		Hats = {},
 		Weapons = { "Default" },
-		WeaponSkins = { "Fire" },
+		WeaponSkins = { "Default" },
 	},
 
 	equipped = {
 		KillEffects = "",
 		Faces = "",
-		Body = "",
+		Outfits = "Default",
 		Hats = "",
 		Weapons = "Default",
-		WeaponSkins = "Fire",
+		WeaponSkins = "Default",
 	},
 
 	settings = {

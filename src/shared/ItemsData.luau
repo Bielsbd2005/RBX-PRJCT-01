@@ -57,8 +57,50 @@ local ItemsData = {
 				Image = "rbxassetid://76043980713122",
 			},
 		},
-		WeaponSkins = {},
-		KillEffects = {},
+		WeaponSkins = {
+			{
+				Name = "PinkDream",
+				Rarity = "Rare",
+				--Se aplica en la primaryPart
+				BaseColor = Color3.fromRGB(253, 176, 255),
+				TextureID = "rbxassetid://10051794906",
+				TextureColor = Color3.fromRGB(221, 0, 255),
+				Animated = true,
+				StudsPerTile = 0.7,
+				TextureTransparency = 0.5,
+
+				Particles = {
+					Enabled = true,
+					Texture = "rbxassetid://138722900670829", -- ID de la partícula
+					Color = ColorSequence.new(
+						Color3.fromRGB(242, 95, 255),
+						Color3.fromRGB(242, 95, 255)
+					),
+					Size = NumberSequence.new(0.111, 0), -- Empieza en 0.5 y desaparece
+					Lifetime = NumberRange.new(0.5, 1),
+					Rate = 10, -- Cuántas partículas salen
+					Speed = NumberRange.new(0.591, 0.591),
+				},
+
+				--Se aplica en la secondaryPart (se llama así)
+				SecondaryPartColor = Color3.fromRGB(140, 93, 180),
+				SecondaryPartTexture = "",
+				SecondaryMaterial = Enum.Material.Salt,
+			},
+			{
+				Name = "Default",
+				Rarity = "Common",
+				BaseColor = Color3.fromRGB(255, 255, 255),
+			}
+		},
+		KillEffects = {
+			{
+				Name = "Default",
+				Price = 5,
+				Rarity = "Common",
+				Image = "rbxassetid://79175047578893",
+			},
+		},
 	},
 	Cosmetics = {
 		Faces = {
@@ -135,8 +177,57 @@ local ItemsData = {
 				Image = "rbxassetid://112166980943980",
 			},
 		},
-		Hats = {},
-		Body = {},
+		Hats = {
+			{
+				Name = "Hat1",
+				Price = 1,
+				Rarity = "Rare",
+				Image = "rbxassetid://97016006374032", -- Placeholder thumbnail
+			},
+			{
+				Name = "Hat2",
+				Price = 2,
+				Rarity = "Rare",
+				Image = "rbxassetid://94019428436806", -- Placeholder thumbnail
+			},
+			{
+				Name = "Hat3",
+				Price = 3,
+				Rarity = "Rare",
+				Image = "rbxassetid://131331207733432", -- Placeholder thumbnail
+			},
+		},
+		Outfits = {
+			{
+				Name = "Default",
+				Rarity = "Common",
+				-- Shirt properties
+				ShirtBaseColor = Color3.fromRGB(190, 59, 76),
+				ShirtTextureID = "rbxassetid://10051794906",
+				ShirtStudsPerTile = 1.175,
+				ShirtTextureTransparency = 0.8,
+				ShirtMaterial = Enum.Material.Fabric,
+
+				-- Pant properties
+				PantMaterial = Enum.Material.Fabric,
+				PantColor = Color3.fromRGB(92, 92, 92),
+			},
+			{
+				Name = "Outfit1",
+				Rarity = "Rare",
+				Price = 3,
+				-- Shirt properties
+				ShirtBaseColor = Color3.fromRGB(253, 176, 255),
+				ShirtTextureID = "rbxassetid://10051794906",
+				ShirtStudsPerTile = 1.181,
+				ShirtTextureTransparency = 0.7,
+				ShirtMaterial = Enum.Material.Salt,
+
+				-- Pant properties
+				PantMaterial = Enum.Material.Salt,
+				PantColor = Color3.fromRGB(253, 176, 255),
+			},
+		},
 	},
 }
 
