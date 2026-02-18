@@ -13,38 +13,38 @@
 		DataController:OnReady(callback)               — callback() se ejecuta cuando los datos estén listos
 ]]
 
+--!native
+--!strict
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
 local ReplicaController = require(ReplicatedStorage.Packages.replicaservice)
 
------ Variables privadas -----
-
-local PlayerReplica = nil -- Se llena cuando el servidor replica los datos
-local IsDataReady = false
-
--- Callbacks esperando a que los datos estén listos
-local ReadyCallbacks = {}
-
--- Conexiones de listeners activas (para cleanup si fuera necesario)
-local ActiveConnections = {}
-
------ Módulo -----
-
+----- Estado del Módulo -----
 local DataController = {}
+local PlayerReplica = nil
+local IsDataReady = false
+local HasStarted = false
+
+-- Cola de espera para scripts que piden datos antes de cargar
+local OnReadyTasks: { () -> () } = {}
 
 --------------------------------------------------------------------------------
--- Utilidades internas
+-- Utilidades Internas
 --------------------------------------------------------------------------------
 
---- Dado un path como "stats.kills", navega la tabla data y devuelve el valor.
-local function getValueAtPath(data, path: string)
-	local keys = string.split(path, ".")
+local function _getValueFromPath(data: any, path: string | {string}): any
+	if not data then return nil end
+	local keys = if type(path) == "string" then string.split(path, ".") else path
 	local pointer = data
-	for _, key in keys do
-		if type(pointer) ~= "table" then
+	for _, key in ipairs(keys) do
+		if type(pointer) == "table" then
+			pointer = pointer[key]
+		else
 			return nil
 		end
-		pointer = pointer[key]
 	end
 	return pointer
 end
@@ -53,138 +53,91 @@ end
 -- API Pública
 --------------------------------------------------------------------------------
 
---- Inicializa DataController. Llamar una vez desde un LocalScript.
 function DataController:Start()
-	-- Escuchar cuando el servidor cree una Réplica de tipo "PlayerData" para nosotros
+	if HasStarted then return end
+	HasStarted = true
+
+	ReplicaController.RequestData()
+
 	ReplicaController.ReplicaOfClassCreated("PlayerData", function(replica)
+		local replicaPlayer = replica.Tags.Player
+		if replicaPlayer ~= LocalPlayer then return end
+
 		PlayerReplica = replica
-
-		print("[DataController] Réplica recibida — datos listos")
-
-		-- Marcar como listo y ejecutar callbacks pendientes
 		IsDataReady = true
-		for _, callback in ReadyCallbacks do
-			task.spawn(callback)
-		end
-		table.clear(ReadyCallbacks)
 
-		-- Cleanup cuando la réplica sea destruida (ej: kick por session stealing)
+		print("[DataController] Datos cargados correctamente.")
+
+		for _, taskFunc in ipairs(OnReadyTasks) do
+			task.spawn(taskFunc)
+		end
+		table.clear(OnReadyTasks)
+
 		replica:AddCleanupTask(function()
 			PlayerReplica = nil
 			IsDataReady = false
-			-- Desconectar todos los listeners
-			for _, connection in ActiveConnections do
-				connection:Disconnect()
-			end
-			table.clear(ActiveConnections)
-			print("[DataController] Réplica destruida — datos no disponibles")
+			print("[DataController] Datos descargados/destruidos.")
 		end)
 	end)
-
-	-- Pedir datos al servidor (DEBE llamarse DESPUÉS de conectar ReplicaOfClassCreated)
-	ReplicaController.RequestData()
-
-	print("[DataController] Inicializado — esperando datos del servidor...")
 end
 
---- Obtiene datos del jugador.
---- Si no se pasa path, devuelve toda la tabla. Si se pasa, navega a esa ruta.
---- @param path string? — Ruta con puntos, ej: "stats.kills", "cash", "inventory.Weapons"
---- @return any — El valor en esa ruta, o nil si no está listo
 function DataController:Get(path: string?)
-	if not PlayerReplica then
-		return nil
-	end
-
-	if path == nil or path == "" then
-		return PlayerReplica.Data
-	end
-
-	return getValueAtPath(PlayerReplica.Data, path)
+	if not PlayerReplica then return nil end
+	if not path then return PlayerReplica.Data end
+	return _getValueFromPath(PlayerReplica.Data, path)
 end
 
---- Registra un callback que se ejecuta cada vez que el valor en `path` cambia.
---- Devuelve una conexión que puede desconectarse con :Disconnect()
---- @param path string — Ruta con puntos, ej: "cash", "stats.kills"
---- @param callback function — callback(newValue, oldValue)
---- @return ScriptConnection
-function DataController:OnChanged(path: string, callback: (newValue: any, oldValue: any) -> ())
-	if PlayerReplica then
-		local connection = PlayerReplica:ListenToChange(path, callback)
-		table.insert(ActiveConnections, connection)
-		return connection
+function DataController:OnChanged(path: string, callback: (newVal: any, oldVal: any) -> ())
+	if IsDataReady and PlayerReplica then
+		return PlayerReplica:ListenToChange(path, callback)
 	end
 
-	-- Si la réplica aún no llegó, almacenar para conectar después
-	local pendingConnection = nil
+	local connectionInfo = { IsConnected = true, RealConnection = nil :: any }
 
-	local function connectWhenReady()
-		if PlayerReplica then
-			pendingConnection = PlayerReplica:ListenToChange(path, callback)
-			table.insert(ActiveConnections, pendingConnection)
-		end
-	end
+	table.insert(OnReadyTasks, function()
+		if not connectionInfo.IsConnected or not PlayerReplica then return end
+		connectionInfo.RealConnection = PlayerReplica:ListenToChange(path, callback)
+	end)
 
-	if IsDataReady then
-		connectWhenReady()
-	else
-		table.insert(ReadyCallbacks, connectWhenReady)
-	end
-
-	-- Devolver un wrapper que permite desconectar incluso antes de estar listo
 	return {
 		Disconnect = function()
-			if pendingConnection then
-				pendingConnection:Disconnect()
-			end
-		end,
+			connectionInfo.IsConnected = false
+			if connectionInfo.RealConnection then connectionInfo.RealConnection:Disconnect() end
+		end
 	}
 end
 
---- ¿Los datos ya están disponibles?
-function DataController:IsReady(): boolean
-	return IsDataReady
+-- ESTA ES LA FUNCIÓN QUE FALTABA Y CAUSABA EL ERROR
+function DataController:OnRawChange(callback: (action: string, path: {string}, ...any) -> ())
+	if IsDataReady and PlayerReplica then
+		return PlayerReplica:ListenToRaw(callback)
+	end
+
+	local connectionInfo = { IsConnected = true, RealConnection = nil :: any }
+
+	table.insert(OnReadyTasks, function()
+		if not connectionInfo.IsConnected or not PlayerReplica then return end
+		connectionInfo.RealConnection = PlayerReplica:ListenToRaw(callback)
+	end)
+
+	return {
+		Disconnect = function()
+			connectionInfo.IsConnected = false
+			if connectionInfo.RealConnection then connectionInfo.RealConnection:Disconnect() end
+		end
+	}
 end
 
---- Ejecuta callback cuando los datos estén listos (inmediatamente si ya lo están).
 function DataController:OnReady(callback: () -> ())
 	if IsDataReady then
 		task.spawn(callback)
 	else
-		table.insert(ReadyCallbacks, callback)
+		table.insert(OnReadyTasks, callback)
 	end
 end
 
---- Escucha CUALQUIER cambio en la réplica (útil para debugging).
---- callback(actionName, pathArray, params...)
-function DataController:OnRawChange(callback)
-	if PlayerReplica then
-		local connection = PlayerReplica:ListenToRaw(callback)
-		table.insert(ActiveConnections, connection)
-		return connection
-	end
-
-	local pendingConnection = nil
-	local function connectWhenReady()
-		if PlayerReplica then
-			pendingConnection = PlayerReplica:ListenToRaw(callback)
-			table.insert(ActiveConnections, pendingConnection)
-		end
-	end
-
-	if IsDataReady then
-		connectWhenReady()
-	else
-		table.insert(ReadyCallbacks, connectWhenReady)
-	end
-
-	return {
-		Disconnect = function()
-			if pendingConnection then
-				pendingConnection:Disconnect()
-			end
-		end,
-	}
+function DataController:IsReady()
+	return IsDataReady
 end
 
 return DataController

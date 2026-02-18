@@ -1,196 +1,138 @@
---[[
-	AdminService
-	Script del servidor que gestiona las peticiones de la consola de administrador.
-	Solo responde a jugadores cuyo UserId esté en ADMIN_IDS.
-
-	Ruta: ServerScriptService.Server.AdminService
-]]
+--!native
+--!strict
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
-
-local DataManager = require(game:GetService("ServerScriptService").Server.Systems.Data.DataManager)
+-- Asumimos que DataManager está en esta ruta según tu script anterior
+local DataManager = require(ServerScriptService.Server.Systems.Data.DataManager)
+local DataTemplate = require(ReplicatedStorage.Shared.Systems.Data.DataTemplate)
 
 ----- Configuración -----
 
--- Añade aquí los UserIds con permisos de admin
-local ADMIN_IDS: { number } = {
-	286176976,
+-- OPTIMIZACIÓN: Usar un diccionario para búsqueda O(1)
+-- [UserId] = true
+local ADMIN_IDS: { [number]: boolean } = {
+	[286176976] = true,
 }
 
 ----- Utilidades -----
 
+-- Verificación instantánea sin bucles
 local function isAdmin(player: Player): boolean
-	for _, id in ADMIN_IDS do
-		if player.UserId == id then
-			return true
-		end
-	end
-	return false
+	return ADMIN_IDS[player.UserId] == true
 end
 
---- Serializa los datos del jugador para enviarlos al cliente.
---- Convierte tablas anidadas de forma segura.
-local function deepCopy(value: any): any
-	if type(value) == "table" then
-		local copy = {}
-		for k, v in value do
-			copy[k] = deepCopy(v)
-		end
-		return copy
+-- Solo necesitamos deepCopy para clonar el Template en ResetData.
+-- Para enviar datos al cliente, Roblox ya hace la serialización.
+local function deepCopy(t: any): any
+	if type(t) ~= "table" then return t end
+	local copy = {}
+	for k, v in pairs(t) do
+		copy[k] = deepCopy(v)
 	end
-	return value
+	return copy
 end
 
------ RemoteFunctions -----
+----- Inicialización de Remotes -----
 
--- Carpeta contenedora
 local adminFolder = Instance.new("Folder")
 adminFolder.Name = "AdminConsole"
 adminFolder.Parent = ReplicatedStorage
 
--- RF: Verificar si el jugador es admin
-local isAdminRF = Instance.new("RemoteFunction")
-isAdminRF.Name = "IsAdmin"
-isAdminRF.Parent = adminFolder
+local function createRemoteFunc(name: string): RemoteFunction
+	local rf = Instance.new("RemoteFunction")
+	rf.Name = name
+	rf.Parent = adminFolder
+	return rf
+end
+
+local isAdminRF = createRemoteFunc("IsAdmin")
+local getPlayersRF = createRemoteFunc("GetPlayers")
+local getPlayerDataRF = createRemoteFunc("GetPlayerData")
+local updateDataRF = createRemoteFunc("UpdateData")
+local resetDataRF = createRemoteFunc("ResetData")
+
+----- Handlers -----
 
 isAdminRF.OnServerInvoke = function(player: Player)
 	return isAdmin(player)
 end
 
--- RF: Obtener lista de jugadores con resumen de datos
-local getPlayersRF = Instance.new("RemoteFunction")
-getPlayersRF.Name = "GetPlayers"
-getPlayersRF.Parent = adminFolder
-
 getPlayersRF.OnServerInvoke = function(player: Player)
-	if not isAdmin(player) then
-		warn("[AdminService] Acceso denegado a", player.Name)
-		return {}
-	end
+	if not isAdmin(player) then return {} end
 
 	local result = {}
-	for _, p in Players:GetPlayers() do
-		local data = DataManager:Get(p)
+	-- GetPlayers devuelve un array, iteración estándar es necesaria aquí
+	for _, p in ipairs(Players:GetPlayers()) do
+		-- Solo verificamos si tiene datos cargados, no leemos todo el perfil aquí para ahorrar memoria
+		local hasProfile = DataManager:Get(p) ~= nil
+
 		table.insert(result, {
 			UserId = p.UserId,
 			Name = p.Name,
 			DisplayName = p.DisplayName,
-			HasData = data ~= nil,
+			HasData = hasProfile,
 		})
 	end
 	return result
 end
 
--- RF: Obtener datos completos de un jugador
-local getPlayerDataRF = Instance.new("RemoteFunction")
-getPlayerDataRF.Name = "GetPlayerData"
-getPlayerDataRF.Parent = adminFolder
-
 getPlayerDataRF.OnServerInvoke = function(player: Player, targetUserId: number)
-	if not isAdmin(player) then
-		warn("[AdminService] Acceso denegado a", player.Name)
-		return nil
-	end
+	if not isAdmin(player) then return nil end
 
-	-- Buscar al jugador por UserId
-	local targetPlayer = nil
-	for _, p in Players:GetPlayers() do
-		if p.UserId == targetUserId then
-			targetPlayer = p
-			break
-		end
-	end
-
-	if not targetPlayer then
-		return nil
-	end
+	-- OPTIMIZACIÓN: Búsqueda nativa directa
+	local targetPlayer = Players:GetPlayerByUserId(targetUserId)
+	if not targetPlayer then return nil end
 
 	local data = DataManager:Get(targetPlayer)
-	if not data then
-		return nil
-	end
 
-	return deepCopy(data)
+	-- No necesitamos deepCopy aquí; RemoteFunction serializa automáticamente al enviar al cliente
+	return data
 end
-
--- RF: Actualizar un campo de datos de un jugador
-local updateDataRF = Instance.new("RemoteFunction")
-updateDataRF.Name = "UpdateData"
-updateDataRF.Parent = adminFolder
 
 updateDataRF.OnServerInvoke = function(player: Player, targetUserId: number, path: string, newValue: any)
-	if not isAdmin(player) then
-		warn("[AdminService] Acceso denegado a", player.Name)
-		return false, "Acceso denegado"
+	if not isAdmin(player) then return false, "Acceso denegado" end
+
+	if type(targetUserId) ~= "number" then return false, "UserId inválido" end
+	if type(path) ~= "string" or path == "" then return false, "Path inválido" end
+
+	-- OPTIMIZACIÓN: Búsqueda nativa
+	local targetPlayer = Players:GetPlayerByUserId(targetUserId)
+	if not targetPlayer then return false, "Jugador no encontrado u offline" end
+
+	-- Validar que no intenten inyectar funciones o metatablas (seguridad básica)
+	if type(newValue) == "function" or type(newValue) == "userdata" then
+		return false, "Tipo de dato no soportado"
 	end
 
-	-- Validar inputs
-	if type(targetUserId) ~= "number" then
-		return false, "UserId inválido"
-	end
-	if type(path) ~= "string" or path == "" then
-		return false, "Path inválido"
-	end
+	-- Llamamos a la versión optimizada de DataManager
+	local finalVal = DataManager:Update(targetPlayer, path, newValue)
 
-	-- Buscar al jugador
-	local targetPlayer = nil
-	for _, p in Players:GetPlayers() do
-		if p.UserId == targetUserId then
-			targetPlayer = p
-			break
-		end
-	end
-
-	if not targetPlayer then
-		return false, "Jugador no encontrado"
-	end
-
-	local success = DataManager:Update(targetPlayer, path, newValue)
-	if success then
-		print("[AdminService]", player.Name, "actualizó", path, "=", tostring(newValue), "para", targetPlayer.Name)
+	if finalVal ~= nil then
+		-- Logging simple para seguridad
+		print(string.format("[ADMIN] %s updated %s's path '%s'", player.Name, targetPlayer.Name, path))
 		return true, "OK"
 	else
-		return false, "Error al actualizar"
+		return false, "Error al actualizar (Path inválido?)"
 	end
 end
 
--- RF: Resetear todos los datos de un jugador al default
-local resetDataRF = Instance.new("RemoteFunction")
-resetDataRF.Name = "ResetData"
-resetDataRF.Parent = adminFolder
-
 resetDataRF.OnServerInvoke = function(player: Player, targetUserId: number)
-	if not isAdmin(player) then
-		warn("[AdminService] Acceso denegado a", player.Name)
-		return false, "Acceso denegado"
-	end
+	if not isAdmin(player) then return false, "Acceso denegado" end
 
-	-- Buscar al jugador
-	local targetPlayer = nil
-	for _, p in Players:GetPlayers() do
-		if p.UserId == targetUserId then
-			targetPlayer = p
-			break
-		end
-	end
+	local targetPlayer = Players:GetPlayerByUserId(targetUserId)
+	if not targetPlayer then return false, "Jugador no encontrado" end
 
-	if not targetPlayer then
-		return false, "Jugador no encontrado"
-	end
-
-	-- Obtener el template por defecto
-	local DataTemplate = require(ReplicatedStorage.Shared.Systems.Data.DataTemplate)
-
-	-- Iterar y resetear cada clave principal para mantener la estructura
-	-- Usamos DataManager:Update para asegurar replicación y validación
-	for key, defaultValue in DataTemplate do
+	-- Iterar y resetear cada clave principal
+	for key, defaultValue in pairs(DataTemplate) do
+		-- AQUÍ sí usamos deepCopy para no asignar la referencia del Template
 		DataManager:Update(targetPlayer, key, deepCopy(defaultValue))
 	end
 
-	print("[AdminService]", player.Name, "trazó RESET FULL DATA para", targetPlayer.Name)
+	print(string.format("[ADMIN] %s RESET DATA for %s", player.Name, targetPlayer.Name))
 	return true, "Datos reseteados al default"
 end
 
-print("[AdminService] Servicio de administrador cargado")
+print("[AdminService] Sistema de administración optimizado cargado")

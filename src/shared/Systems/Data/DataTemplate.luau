@@ -1,17 +1,14 @@
---[[
-	DataTemplate
-	Plantilla por defecto para los datos de cada jugador.
-	Usado por ProfileStore (servidor) y DataController (cliente).
+local DataTemplate: ProfileData = {
+	-- Versión del esquema de datos (Incrementar si haces cambios estructurales grandes)
+	SchemaVersion = 1,
 
-	Ruta: ReplicatedStorage.Shared.DataTemplate
-]]
-
-return {
+	-- Economía y Progreso
 	level = 1,
 	xp = 0,
 	cash = 100,
 	gems = 0,
 
+	-- Estadísticas
 	stats = {
 		kills = 0,
 		deaths = 0,
@@ -20,6 +17,7 @@ return {
 		playTime = 0,
 	},
 
+	-- Inventario (Arrays de strings con nombres de items)
 	inventory = {
 		KillEffects = {},
 		Faces = {},
@@ -29,6 +27,7 @@ return {
 		WeaponSkins = { "Default" },
 	},
 
+	-- Items Equipados (String vacío "" significa nada equipado, "Default" es item base)
 	equipped = {
 		KillEffects = "",
 		Faces = "",
@@ -38,16 +37,23 @@ return {
 		WeaponSkins = "Default",
 	},
 
+	-- Configuración del Cliente
 	settings = {
 		mouseSensitivity = 1,
 		musicVolume = 0.8,
 		sfxVolume = 1,
 	},
 
+	-- Metadatos del Sistema
 	meta = {
-		createdAt = 0,
+		createdAt = 0, -- Se rellena en DataManager
 		updatedAt = 0,
 		lastDailyReward = 0,
 		isBanned = false,
 	},
 }
+
+-- OPTIMIZACIÓN DE SEGURIDAD:
+table.freeze(DataTemplate)
+
+return DataTemplate

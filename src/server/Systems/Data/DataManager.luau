@@ -13,89 +13,134 @@
 ]]
 
 local Players = game:GetService("Players")
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
+-- Asegúrate de que los types estén bien definidos en tus módulos
 local ProfileStore = require(ReplicatedStorage.Packages.profilestore)
 local ReplicaService = require(ReplicatedStorage.Packages.replicaservice)
-
--- Template compartido
 local DataTemplate = require(ReplicatedStorage.Shared.Systems.Data.DataTemplate)
 
 ----- Configuración -----
-
 local STORE_NAME = "PlayerData"
 local PROFILE_KEY_PREFIX = "Player_"
-
------ Variables privadas -----
 
 local PlayerDataStore = ProfileStore.New(STORE_NAME, DataTemplate)
 local PlayerClassToken = ReplicaService.NewClassToken("PlayerData")
 
--- Cache de perfiles y réplicas activos
-local Profiles = {} -- [Player] = Profile
-local Replicas = {} -- [Player] = Replica
+-- Tipado básico para autocompletado interno
+type Profile = {
+	Data: any,
+	Release: (self: any) -> (),
+	Reconcile: (self: any) -> (),
+	AddUserId: (self: any, id: number) -> (),
+	OnSessionEnd: RBXScriptSignal,
+	EndSession: (self: any) -> ()
+}
 
-local IsInited = false
+local Profiles: { [Player]: Profile } = {}
+local Replicas: { [Player]: any } = {}
 
 ----- Módulo -----
-
 local DataManager = {}
+DataManager.IsInited = false
 
 --------------------------------------------------------------------------------
--- Utilidades internas
+-- Utilidades privadas
 --------------------------------------------------------------------------------
 
---- Dado un path como "stats.kills", devuelve (parentTable, leafKey) en la tabla data.
-local function resolvePath(data, path: string)
-	local keys = string.split(path, ".")
+-- Obtiene el valor actual para operaciones matemáticas (Increment)
+local function _getValueFromPath(data: table, keys: {string}): any
 	local pointer = data
-	for i = 1, #keys - 1 do
-		pointer = pointer[keys[i]]
-		if type(pointer) ~= "table" then
-			warn("[DataManager] Path inválido:", path, "- no se encontró:", keys[i])
-			return nil, nil
+	for _, key in ipairs(keys) do
+		if type(pointer) == "table" then
+			pointer = pointer[key]
+		else
+			return nil
 		end
 	end
-	return pointer, keys[#keys]
+	return pointer
+end
+
+-- Modificador centralizado optimizado
+local function _applyChange(player: Player, path: string, newValue: any, isIncrement: boolean, incrementAmount: number?)
+	local profile = Profiles[player]
+	local replica = Replicas[player]
+
+	if not profile then return nil end
+
+	-- string.split es rápido en Luau, no hace falta cachear a menos que sean miles/frame
+	local keys = string.split(path, ".")
+	local finalValue = newValue
+
+	-- Lógica para Increment
+	if isIncrement and incrementAmount then
+		local currentValue = _getValueFromPath(profile.Data, keys)
+		if type(currentValue) == "number" then
+			finalValue = currentValue + incrementAmount
+		else
+			finalValue = incrementAmount -- Fallback si el valor anterior era nil
+		end
+	end
+
+	-- APLICACIÓN DEL CAMBIO
+	if replica then
+		-- ReplicaService actualiza profile.Data internamente (por referencia)
+		-- y gestiona la replicación.
+		replica:SetValue(keys, finalValue)
+	else
+		-- Fallback: Si la réplica no está lista (ej. durante carga/descarga),
+		-- aplicamos el cambio manualmente a profile.Data
+		local pointer = profile.Data
+		local success = true
+		for i = 1, #keys - 1 do
+			local key = keys[i]
+			if type(pointer[key]) ~= "table" then
+				-- Si el camino no existe, intentamos crearlo (opcional, pero seguro)
+				-- pointer[key] = {}
+				-- O simplemente fallamos:
+				success = false; break
+			end
+			pointer = pointer[key]
+		end
+
+		if success then
+			pointer[keys[#keys]] = finalValue
+		end
+	end
+
+	return finalValue
 end
 
 --------------------------------------------------------------------------------
--- Carga y liberación de perfiles
+-- Gestión de Perfiles
 --------------------------------------------------------------------------------
 
 local function onPlayerAdded(player: Player)
-	print("[DataManager] Intentando cargar perfil para:", player.Name)
-	local profileKey = PROFILE_KEY_PREFIX .. tostring(player.UserId)
+	local profileKey = PROFILE_KEY_PREFIX .. player.UserId
 
-	-- Intentar cargar el perfil con session locking
 	local profile = PlayerDataStore:StartSessionAsync(profileKey, {
-		Cancel = function()
-			return player.Parent ~= Players
-		end,
+		Cancel = function() return player.Parent ~= Players end,
 	})
 
-	-- El jugador se fue antes de que cargara
-	if profile == nil then
-		warn("[DataManager] StartSessionAsync devolvió nil (posible lock) para:", player.Name)
-		player:Kick("[DataManager] No se pudo cargar tu perfil. Inténtalo de nuevo.")
+	if not profile then
+		-- Si falla el Session Lock, kickeamos
+		player:Kick("No se pudieron cargar tus datos. Por favor, reintenta.")
 		return
 	end
 
-	-- Si el jugador se desconectó mientras cargábamos
 	if player.Parent ~= Players then
 		profile:EndSession()
 		return
 	end
 
-	-- Reconciliar datos
-	profile:Reconcile()
-	profile:AddUserId(player.UserId)
+	profile:Reconcile() -- Rellena datos faltantes desde el Template
+	profile:AddUserId(player.UserId) -- Cumplimiento GDPR
 
-	if profile.Data.meta.createdAt == 0 then
+	-- Metadatos de creación
+	if profile.Data.meta and profile.Data.meta.createdAt == 0 then
 		profile.Data.meta.createdAt = os.time()
 	end
-	profile.Data.meta.updatedAt = os.time()
 
 	profile.OnSessionEnd:Connect(function()
 		Profiles[player] = nil
@@ -103,33 +148,22 @@ local function onPlayerAdded(player: Player)
 			Replicas[player]:Destroy()
 			Replicas[player] = nil
 		end
-		player:Kick("[DataManager] Tu sesión fue reclamada por otro servidor.")
+
+		if player.Parent == Players then
+			player:Kick("Sesión de datos finalizada (Posible duplicación).")
+		end
 	end)
 
 	Profiles[player] = profile
 
-	local replica = ReplicaService.NewReplica({
+	-- Creamos la Réplica
+	-- Pasamos 'profile.Data' por referencia. ReplicaService modificará esta tabla directamente.
+	Replicas[player] = ReplicaService.NewReplica({
 		ClassToken = PlayerClassToken,
 		Tags = { Player = player },
 		Data = profile.Data,
 		Replication = player,
 	})
-	Replicas[player] = replica
-
-	print("[DataManager] Perfil cargado EXITOSAMENTE para", player.Name)
-end
-
-local function onPlayerRemoving(player: Player)
-	local profile = Profiles[player]
-	if profile then
-		profile:EndSession()
-	end
-	if Replicas[player] then
-		Replicas[player]:Destroy()
-		Replicas[player] = nil
-	end
-	Profiles[player] = nil
-	print("[DataManager] Perfil liberado para", player.Name)
 end
 
 --------------------------------------------------------------------------------
@@ -137,101 +171,56 @@ end
 --------------------------------------------------------------------------------
 
 function DataManager:Start()
-	if IsInited then return end
-	IsInited = true
+	if self.IsInited then return end
+	self.IsInited = true
 
-	print("[DataManager] Iniciando servicio...")
-
-	Players.PlayerAdded:Connect(onPlayerAdded)
-	Players.PlayerRemoving:Connect(onPlayerRemoving)
-
-	for _, player in Players:GetPlayers() do
+	for _, player in ipairs(Players:GetPlayers()) do
 		task.spawn(onPlayerAdded, player)
 	end
 
-	game:BindToClose(function()
-		for _, player in Players:GetPlayers() do
-			task.spawn(onPlayerRemoving, player)
-		end
-		task.wait(3)
-	end)
+	Players.PlayerAdded:Connect(onPlayerAdded)
 
-	print("[DataManager] Servicio DataManager INICIADO")
+	Players.PlayerRemoving:Connect(function(player)
+		local profile = Profiles[player]
+		if profile then
+			profile:EndSession()
+		end
+	end)
 end
 
 function DataManager:Get(player: Player)
-	if not IsInited then warn("[DataManager] ERROR: DataManager no ha sido iniciado con :Start()") end
 	local profile = Profiles[player]
-	if profile then return profile.Data end
-	return nil
+	return profile and profile.Data or nil
 end
 
 function DataManager:Update(player: Player, path: string, value: any)
-	if not IsInited then warn("[DataManager] ERROR: DataManager no ha sido iniciado con :Start()") end
-	local profile = Profiles[player]
-	if not profile then
-		warn("[DataManager] Update: perfil no cargado para", player.Name)
-		return false
-	end
-	-- ... (resto igual)
-
-	local parent, key = resolvePath(profile.Data, path)
-	if parent == nil then
-		return false
-	end
-
-	parent[key] = value
-
-	-- Sincronizar con el cliente via Réplica
-	local replica = Replicas[player]
-	if replica then
-		replica:SetValue(path, value)
-	end
-
-	return true
+	return _applyChange(player, path, value, false)
 end
 
---- Incrementa un valor numérico en la ruta especificada.
---- Ejemplo: DataManager:Increment(player, "cash", 100)
 function DataManager:Increment(player: Player, path: string, amount: number)
+	return _applyChange(player, path, nil, true, amount)
+end
+
+--[[
+    BatchUpdate Optimizado:
+    ReplicaService agrupa automáticamente todos los cambios ocurridos en un mismo frame
+    en un solo paquete de red. No necesitamos usar 'SetValues' manualmente.
+    Iteramos y usamos _applyChange para garantizar que los paths con puntos ("stats.gold")
+    se resuelvan correctamente.
+]]
+function DataManager:BatchUpdate(player: Player, updates: { [string]: any })
 	local profile = Profiles[player]
-	if not profile then
-		warn("[DataManager] Increment: perfil no cargado para", player.Name)
-		return false
-	end
+	if not profile then return false end
 
-	local parent, key = resolvePath(profile.Data, path)
-	if parent == nil then
-		return false
-	end
-
-	local currentValue = parent[key]
-	if type(currentValue) ~= "number" then
-		warn("[DataManager] Increment: el valor en", path, "no es numérico:", type(currentValue))
-		return false
-	end
-
-	local newValue = currentValue + amount
-	parent[key] = newValue
-
-	-- Sincronizar con el cliente
-	local replica = Replicas[player]
-	if replica then
-		replica:SetValue(path, newValue)
+	for path, value in pairs(updates) do
+		_applyChange(player, path, value, false)
 	end
 
 	return true
 end
 
---- Obtiene la Réplica de un jugador (para uso avanzado en otros módulos servidor).
 function DataManager:GetReplica(player: Player)
 	return Replicas[player]
-end
-
---- Devuelve el diccionario completo de perfiles cargados [Player] = Profile.
---- Uso exclusivo para herramientas de admin.
-function DataManager:GetAllProfiles()
-	return Profiles
 end
 
 return DataManager

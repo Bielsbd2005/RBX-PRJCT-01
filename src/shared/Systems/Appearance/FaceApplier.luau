@@ -9,7 +9,6 @@ function FaceApplier.Apply(character: Model, itemData: table)
 
 	local face = head:FindFirstChild("face")
 	if not face then
-		-- Crear face si no existe
 		face = Instance.new("Decal")
 		face.Name = "face"
 		face.Parent = head
