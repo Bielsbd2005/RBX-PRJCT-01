@@ -13,14 +13,14 @@
 ]]
 
 local Players = game:GetService("Players")
-local ServerStorage = game:GetService("ServerStorage")
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ProfileStore = require(ReplicatedStorage.Packages.profilestore)
 local ReplicaService = require(ReplicatedStorage.Packages.replicaservice)
 
 -- Template compartido
-local DataTemplate = require(ReplicatedStorage.Shared.DataTemplate)
+local DataTemplate = require(ReplicatedStorage.Shared.Systems.Data.DataTemplate)
 
 ----- Configuración -----
 

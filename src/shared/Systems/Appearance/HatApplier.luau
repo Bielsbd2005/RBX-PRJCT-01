@@ -1,5 +1,5 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local HatsFolder = ReplicatedStorage:WaitForChild("Hats")
+local HatsFolder = ReplicatedStorage.Shared.Systems.Locker:WaitForChild("Hats")
 
 local HatApplier = {}
 

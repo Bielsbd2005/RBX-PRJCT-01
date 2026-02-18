@@ -15,7 +15,7 @@ local ItemsDataUtils = {}
 local _itemsData = nil
 local function getItemsData()
 	if not _itemsData then
-		_itemsData = require(ReplicatedStorage.Shared.ItemsData)
+		_itemsData = require(ReplicatedStorage.Shared.Systems.Locker.Data.ItemsData)
 	end
 	return _itemsData
 end

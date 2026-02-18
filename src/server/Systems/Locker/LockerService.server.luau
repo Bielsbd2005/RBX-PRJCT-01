@@ -7,9 +7,9 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerStorage = game:GetService("ServerStorage")
 
-local DataManager = require(ServerStorage.Modules.DataManager)
+
+local DataManager = require(game:GetService("ServerScriptService").Server.Systems.Data.DataManager)
 
 -- Crear carpeta para Remotes si no existe
 local shopFolder = ReplicatedStorage:FindFirstChild("Shop") or Instance.new("Folder")
@@ -68,7 +68,7 @@ local buyItemRF = shopFolder:FindFirstChild("BuyItem") or Instance.new("RemoteFu
 buyItemRF.Name = "BuyItem"
 buyItemRF.Parent = shopFolder
 
-local ItemsData = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ItemsData"))
+local ItemsData = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Systems"):WaitForChild("Locker"):WaitForChild("Data"):WaitForChild("ItemsData"))
 
 buyItemRF.OnServerInvoke = function(player: Player, tab: string, category: string, itemName: string)
 	if type(tab) ~= "string" or type(category) ~= "string" or type(itemName) ~= "string" then

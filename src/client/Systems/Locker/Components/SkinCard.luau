@@ -68,7 +68,7 @@ local function SkinCard(scope: Fusion.Scope<typeof(Fusion)>, props: {
 
 		-- 1. CLONACIÓN Y LIMPIEZA
 		local weaponName = "Default" -- Fusion.peek(props.equippedWeapon) or "Default" -- Reverted to always "Default" as requested
-		local weaponsFolder = ReplicatedStorage:WaitForChild("Weapons", 5)
+		local weaponsFolder = ReplicatedStorage.Shared.Systems.Locker:WaitForChild("Weapons", 5)
 		local baseModel = weaponsFolder and (weaponsFolder:FindFirstChild(weaponName) or weaponsFolder:FindFirstChild("Default"))
 
 		if not baseModel then return end
@@ -107,7 +107,7 @@ local function SkinCard(scope: Fusion.Scope<typeof(Fusion)>, props: {
 		) * CFrame.new(-DESPLAZAMIENTO_X, 0, 0) -- Desplazamos la cámara a la izquierda
 
 		-- 4. APLICAR SKIN using shared module
-		local SkinApplier = require(ReplicatedStorage.Shared.Modules.Appearance.SkinApplier)
+		local SkinApplier = require(ReplicatedStorage.Shared.Systems.Appearance.SkinApplier)
 		local data = props.skinData
 		local textures = SkinApplier.apply(clonedModel, data)
 

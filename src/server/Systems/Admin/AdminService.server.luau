@@ -8,9 +8,9 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerStorage = game:GetService("ServerStorage")
 
-local DataManager = require(ServerStorage.Modules.DataManager)
+
+local DataManager = require(game:GetService("ServerScriptService").Server.Systems.Data.DataManager)
 
 ----- Configuración -----
 
@@ -181,7 +181,7 @@ resetDataRF.OnServerInvoke = function(player: Player, targetUserId: number)
 	end
 
 	-- Obtener el template por defecto
-	local DataTemplate = require(ReplicatedStorage.Shared.DataTemplate)
+	local DataTemplate = require(ReplicatedStorage.Shared.Systems.Data.DataTemplate)
 
 	-- Iterar y resetear cada clave principal para mantener la estructura
 	-- Usamos DataManager:Update para asegurar replicación y validación

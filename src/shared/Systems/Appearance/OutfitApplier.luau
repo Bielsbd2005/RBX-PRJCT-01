@@ -5,7 +5,7 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SkinApplier = require(ReplicatedStorage.Shared.Modules.Appearance.SkinApplier)
+local SkinApplier = require(ReplicatedStorage.Shared.Systems.Appearance.SkinApplier)
 
 local OutfitApplier = {}
 

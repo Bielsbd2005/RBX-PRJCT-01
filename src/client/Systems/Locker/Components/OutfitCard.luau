@@ -54,7 +54,7 @@ local function OutfitCard(scope: Fusion.Scope<typeof(Fusion)>, props: {
 		vp:ClearAllChildren()
 
 		-- 1. CLONACIÓN
-		local template = ReplicatedStorage:WaitForChild("ClothingTemplate", 5)
+		local template = ReplicatedStorage.Shared.Systems.Locker.Templates:WaitForChild("ClothingTemplate", 5)
 		if not template then return end
 
 		local clonedChar = template:Clone()
@@ -91,7 +91,7 @@ local function OutfitCard(scope: Fusion.Scope<typeof(Fusion)>, props: {
 		)
 
 		-- 4. APLICAR OUTFIT using shared module
-		local OutfitApplier = require(ReplicatedStorage.Shared.Modules.Appearance.OutfitApplier)
+		local OutfitApplier = require(ReplicatedStorage.Shared.Systems.Appearance.OutfitApplier)
 		OutfitApplier.Apply(clonedChar, props.outfitData)
 
 		-- Animación Idle (opcional, si tiene humanoide)

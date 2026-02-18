@@ -15,11 +15,7 @@
         "$path": "src/server"
       }
     },
-    "ServerStorage": {
-      "Modules": {
-        "$path": "src/server-modules"
-      }
-    },
+
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "Client": {

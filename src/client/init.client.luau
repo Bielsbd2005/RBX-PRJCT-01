@@ -6,7 +6,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- Inicializar sistema de datos (cliente)
-local DataController = require(ReplicatedStorage.Shared.Modules.DataController)
+local DataController = require(ReplicatedStorage.Shared.Systems.Data.DataController)
 DataController:Start()
 
 -- Debug: escuchar cualquier cambio de datos

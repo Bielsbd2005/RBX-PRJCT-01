@@ -31,8 +31,8 @@ local OutfitCard = require(script.Parent.Components.OutfitCard)
 local Constants = require(script.Parent.Components.StoreConstants)
 
 -- Shared modules
-local SkinApplier = require(ReplicatedStorage.Shared.Modules.Appearance.SkinApplier)
-local ItemsDataUtils = require(ReplicatedStorage.Shared.ItemsDataUtils)
+local SkinApplier = require(ReplicatedStorage.Shared.Systems.Appearance.SkinApplier)
+local ItemsDataUtils = require(ReplicatedStorage.Shared.Systems.Locker.Data.ItemsDataUtils)
 
 -- Jugador local
 local player = Players.LocalPlayer
@@ -79,7 +79,7 @@ local uiScale = Computed(scope, function(use)
 end)
 
 -- Gestor de Cámaras
-local CameraManager = require(ReplicatedStorage.Shared.Modules.Camera.CameraManager)
+local CameraManager = require(ReplicatedStorage.Shared.Systems.Camera.CameraManager)
 local EffectsManager = require(script.Parent.Modules.EffectsManager)
 
 --------------------------------------------------------------------------------
@@ -111,7 +111,7 @@ local function spawnCharacter()
 	-- Si ya existe, no recrear (optimización), pero asegurar que es visible
 	if peek(previewCharacter) then return peek(previewCharacter) end
 
-	local template = ReplicatedStorage:WaitForChild("CharacterTemplate", 5)
+	local template = ReplicatedStorage.Shared.Systems.Locker.Templates:WaitForChild("CharacterTemplate", 5)
 	if not template then warn("CharacterTemplate no encontrado"); return end
 
 	local lockerFolder = workspace:WaitForChild("Locker", 5)
@@ -144,7 +144,7 @@ local function spawnKillEffectDummy(forceRespawn)
 	local existing = peek(previewKillEffectDummy)
 	if existing then existing:Destroy(); previewKillEffectDummy:set(nil) end
 
-	local template = ReplicatedStorage:FindFirstChild("Dummy") or ReplicatedStorage:FindFirstChild("CharacterTemplate") -- Fallback
+	local template = ReplicatedStorage.Shared.Systems.Locker.Templates:FindFirstChild("Dummy")
 	if not template then warn("Dummy/CharacterTemplate not found for KillEffect"); return end
 
 	local lockerFolder = workspace:WaitForChild("Locker", 5)
@@ -203,7 +203,7 @@ local function playKillEffectPreview(effectItem)
 	-- Wait for character to be fully in workspace
 	task.wait()
 
-    local killEffectsFolder = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Modules") and ReplicatedStorage.Shared.Modules:FindFirstChild("KillEffects")
+    local killEffectsFolder = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Systems") and ReplicatedStorage.Shared.Systems:FindFirstChild("Combat") and ReplicatedStorage.Shared.Systems.Combat:FindFirstChild("KillEffects")
     local effectTemplate = killEffectsFolder and killEffectsFolder:FindFirstChild(effectItem.Name)
 
     if effectTemplate then
@@ -285,12 +285,12 @@ local function spawnWeapon(weaponName: string, skinData: { [string]: any }?)
 		skinAnimationConnection = nil
 	end
 
-	local weaponsFolder = ReplicatedStorage:WaitForChild("Weapons", 5)
+	local weaponsFolder = ReplicatedStorage.Shared.Systems.Locker:WaitForChild("Weapons", 5)
 	local weaponTemplate = weaponsFolder and weaponsFolder:FindFirstChild(weaponName)
 
 	if not weaponTemplate then
 		-- Fallback a Default si no existe la específica (para evitar vacío)
-		weaponTemplate = weaponsFolder:FindFirstChild("Default") or weaponsFolder:FindFirstChild("Weapon1")
+		weaponTemplate = weaponsFolder:FindFirstChild("Default")
 	end
 
 	if not weaponTemplate then warn("Weapon model not found:", weaponName); return end
@@ -321,11 +321,11 @@ end
 
 
 -- Gestor de Apariencia
-local FaceApplier = require(ReplicatedStorage.Shared.Modules.Appearance.FaceApplier)
-local HatApplier = require(ReplicatedStorage.Shared.Modules.Appearance.HatApplier)
-local OutfitApplier = require(ReplicatedStorage.Shared.Modules.Appearance.OutfitApplier)
-local ItemsData = require(ReplicatedStorage.Shared.ItemsData)
-local DataController = require(ReplicatedStorage.Shared.Modules.DataController)
+local FaceApplier = require(ReplicatedStorage.Shared.Systems.Appearance.FaceApplier)
+local HatApplier = require(ReplicatedStorage.Shared.Systems.Appearance.HatApplier)
+local OutfitApplier = require(ReplicatedStorage.Shared.Systems.Appearance.OutfitApplier)
+local ItemsData = require(ReplicatedStorage.Shared.Systems.Locker.Data.ItemsData)
+local DataController = require(ReplicatedStorage.Shared.Systems.Data.DataController)
 
 -- Estado reactivo de los datos del jugador (Global para usar en functions)
 local playerData = Value(scope, DataController:Get() or {})
