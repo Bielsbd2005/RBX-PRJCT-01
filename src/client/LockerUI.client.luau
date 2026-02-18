@@ -8,7 +8,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local _RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 -- Fusion 0.3 imports
 local Fusion = require(ReplicatedStorage.Packages.fusion)
@@ -29,6 +29,10 @@ local ActionFrame = require(script.Parent.Components.ActionFrame)
 local SkinCard = require(script.Parent.Components.SkinCard)
 local OutfitCard = require(script.Parent.Components.OutfitCard)
 local Constants = require(script.Parent.Components.StoreConstants)
+
+-- Shared modules
+local SkinApplier = require(ReplicatedStorage.Shared.Modules.Appearance.SkinApplier)
+local ItemsDataUtils = require(ReplicatedStorage.Shared.ItemsDataUtils)
 
 -- Jugador local
 local player = Players.LocalPlayer
@@ -83,9 +87,6 @@ local EffectsManager = require(script.Parent.Modules.EffectsManager)
 --------------------------------------------------------------------------------
 
 local skinAnimationConnection: RBXScriptConnection? = nil
-local TILE_SIZE = 2
-local TEXTURE_SPEED_U = 0.5
-local TEXTURE_SPEED_V = 0
 
 local previewKillEffectDummy = Value(scope, nil)
 local killEffectDebounce = false
@@ -126,7 +127,7 @@ local function spawnCharacter()
 	local animator = humanoid and humanoid:WaitForChild("Animator", 5)
 	if animator then
 		local animation = Instance.new("Animation")
-		animation.AnimationId = "rbxassetid://77576237797818"
+		animation.AnimationId = Constants.AnimationIds.Idle
 		local track = animator:LoadAnimation(animation)
 		track.Looped = true
 		track:Play()
@@ -173,7 +174,7 @@ local function spawnKillEffectDummy(forceRespawn)
 	local animator = humanoid and humanoid:WaitForChild("Animator", 5)
 	if animator then
 		local animation = Instance.new("Animation")
-		animation.AnimationId = "rbxassetid://77576237797818"
+		animation.AnimationId = Constants.AnimationIds.Idle
 		local track = animator:LoadAnimation(animation)
 		track.Looped = true
 		track:Play()
@@ -199,6 +200,9 @@ local function playKillEffectPreview(effectItem)
     -- Assuming effects are particles/scripts in a folder or just a visual cue
     print("Playing Kill Effect:", effectItem.Name)
 
+	-- Wait for character to be fully in workspace
+	task.wait()
+
     local killEffectsFolder = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Modules") and ReplicatedStorage.Shared.Modules:FindFirstChild("KillEffects")
     local effectTemplate = killEffectsFolder and killEffectsFolder:FindFirstChild(effectItem.Name)
 
@@ -215,6 +219,7 @@ local function playKillEffectPreview(effectItem)
     -- Trigger Death to activate the effect
 	local humanoid = dummy:FindFirstChild("Humanoid")
 	if humanoid then
+		task.wait() -- Allow Died event to connect
 		humanoid.Health = 0
 	end
 
@@ -252,107 +257,17 @@ end
 local function applySkin(weapon: Model, skinData: { [string]: any })
 	if not weapon or not skinData then return end
 
-	-- Clean up previous animation connection if any (though usually managed by spawnWeapon/cleanup)
-	-- We don't disconnect here because spawnWeapon handles the global connection var
-
-	local textures = {} -- Keep track of textures for animation
-
-	for _, part in weapon:GetDescendants() do
-		if part:IsA("BasePart") then
-			-- Skip invisible parts (hitboxes, etc.) to save memory/draw calls
-			if part.Transparency == 1 then
-				continue
-			end
-
-			-- Logic for SecondaryPart
-			if part.Name == "SecondaryPart" then
-				part.Color = skinData.SecondaryPartColor or part.Color
-
-				if skinData.SecondaryMaterial then
-					part.Material = skinData.SecondaryMaterial
-				end
-
-				if part:IsA("MeshPart") then
-					part.TextureID = skinData.SecondaryPartTexture or ""
-				elseif skinData.SecondaryPartTexture and skinData.SecondaryPartTexture ~= "" then
-					for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
-						local t = Instance.new("Texture")
-						t.Name = "SecondaryTexture_" .. face.Name
-						t.Face = face
-						t.Texture = skinData.SecondaryPartTexture
-						t.Transparency = skinData.TextureTransparency or 0
-						t.StudsPerTileU = skinData.StudsPerTile or TILE_SIZE
-						t.StudsPerTileV = skinData.StudsPerTile or TILE_SIZE
-						t.Color3 = Color3.new(1,1,1)
-						t.Parent = part
-						table.insert(textures, t)
-					end
-				end
-
-			-- Logic for other parts (Primary Style)
-			else
-				part.Color = skinData.BaseColor
-				part.Material = skinData.Material or Enum.Material.Plastic
-
-				-- Apply textures to all faces if TextureID exists
-				if skinData.TextureID and skinData.TextureID ~= "" then
-					for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
-						local t = Instance.new("Texture")
-						t.Name = "SkinTexture_" .. face.Name
-						t.Face = face
-						t.Texture = skinData.TextureID
-						t.Transparency = skinData.TextureTransparency or 0
-						t.StudsPerTileU = skinData.StudsPerTile or TILE_SIZE
-						t.StudsPerTileV = skinData.StudsPerTile or TILE_SIZE
-						t.Color3 = skinData.TextureColor or Color3.new(1,1,1)
-						t.Parent = part
-						table.insert(textures, t)
-					end
-				end
-
-				-- Particles (ADDITION to SkinCard logic)
-				if part == weapon.PrimaryPart and skinData.Particles and skinData.Particles.Enabled then
-					local p = Instance.new("ParticleEmitter")
-					p.Name = "SkinParticles"
-					p.Texture = skinData.Particles.Texture
-					p.Color = skinData.Particles.Color
-					p.Size = skinData.Particles.Size
-					p.Lifetime = skinData.Particles.Lifetime
-					p.Rate = skinData.Particles.Rate
-					p.Speed = skinData.Particles.Speed
-					p.Parent = part
-				end
-			end
-		end
+	-- Disconnect previous animation
+	if skinAnimationConnection then
+		skinAnimationConnection:Disconnect()
+		skinAnimationConnection = nil
 	end
 
-	-- Animation Logic
-	if skinData.Animated or (skinData.TextureID and skinData.TextureID ~= "") or (skinData.SecondaryPartTexture and skinData.SecondaryPartTexture ~= "") then
-		if skinAnimationConnection then skinAnimationConnection:Disconnect() end
+	-- Apply skin using shared module (also cleans up previous textures)
+	local textures = SkinApplier.apply(weapon, skinData)
 
-		-- Loop state
-		local currentU = 0
-		local currentV = 0
-
-		skinAnimationConnection = RunService.RenderStepped:Connect(function(dt)
-			if not weapon or not weapon.Parent then
-				if skinAnimationConnection then skinAnimationConnection:Disconnect() end
-				skinAnimationConnection = nil
-				return
-			end
-
-            -- Only animate if Animated flag is true
-            if skinData.Animated then
-			    currentU = (currentU + TEXTURE_SPEED_U * dt) % (skinData.StudsPerTile or TILE_SIZE)
-			    currentV = (currentV + TEXTURE_SPEED_V * dt) % (skinData.StudsPerTile or TILE_SIZE)
-
-			    for _, t in textures do
-				    t.OffsetStudsU = currentU
-				    t.OffsetStudsV = currentV
-			    end
-            end
-		end)
-	end
+	-- Start animation if needed (uses Heartbeat, not RenderStepped)
+	skinAnimationConnection = SkinApplier.startAnimation(textures, skinData, weapon)
 end
 
 local function spawnWeapon(weaponName: string, skinData: { [string]: any }?)
@@ -426,28 +341,11 @@ end)
 
 local function restorePreview()
 	local data = peek(playerData)
-	local currentTab = peek(selectedTab)
 
 	-- Restore Weapon
-	local equippedWeapon = "Default"
-	if data and data.equipped and data.equipped.Weapons then
-		equippedWeapon = data.equipped.Weapons
-	end
-
-	local equippedSkinData = nil
-	local skinName = "Default"
-	if data and data.equipped and data.equipped.WeaponSkins then
-		skinName = data.equipped.WeaponSkins
-	end
-
-	if ItemsData.Arsenal and ItemsData.Arsenal.WeaponSkins then
-		for _, s in ItemsData.Arsenal.WeaponSkins do
-			if s.Name == skinName then
-				equippedSkinData = s
-				break
-			end
-		end
-	end
+	local equippedWeapon = (data and data.equipped and data.equipped.Weapons) or "Default"
+	local skinName = (data and data.equipped and data.equipped.WeaponSkins) or "Default"
+	local equippedSkinData = ItemsDataUtils.findByName("Arsenal", "WeaponSkins", skinName)
 
 	spawnWeapon(equippedWeapon, equippedSkinData)
 
@@ -455,47 +353,20 @@ local function restorePreview()
 	local char = spawnCharacter()
 	if char and data and data.equipped then
 		-- Face
-		local equippedFaceName = data.equipped.Faces
-		if equippedFaceName then
-			local faceItem = nil
-			if ItemsData.Cosmetics and ItemsData.Cosmetics.Faces then
-				for _, item in ItemsData.Cosmetics.Faces do
-					if item.Name == equippedFaceName then faceItem = item; break end
-				end
-			end
-			if faceItem then FaceApplier.Apply(char, faceItem) end
-		end
+		local faceItem = ItemsDataUtils.findByName("Cosmetics", "Faces", data.equipped.Faces)
+		if faceItem then FaceApplier.Apply(char, faceItem) end
 
 		-- Hat
-		local equippedHatName = data.equipped.Hats
-		if equippedHatName then
-			local hatItem = nil
-			if ItemsData.Cosmetics and ItemsData.Cosmetics.Hats then
-				for _, item in ItemsData.Cosmetics.Hats do
-					if item.Name == equippedHatName then hatItem = item; break end
-				end
-			end
-			if hatItem then
-				HatApplier.Apply(char, hatItem)
-			else
-				HatApplier.Clear(char)
-			end
+		local hatItem = ItemsDataUtils.findByName("Cosmetics", "Hats", data.equipped.Hats)
+		if hatItem then
+			HatApplier.Apply(char, hatItem)
 		else
 			HatApplier.Clear(char)
 		end
 
 		-- Outfit
-		local equippedOutfitName = data.equipped.Outfits
-		if equippedOutfitName then
-			local outfitItem = nil
-			if ItemsData.Cosmetics and ItemsData.Cosmetics.Outfits then
-				for _, item in ItemsData.Cosmetics.Outfits do
-					if item.Name == equippedOutfitName then outfitItem = item; break end
-				end
-			end
-			if outfitItem then OutfitApplier.Apply(char, outfitItem) end
-		end
-
+		local outfitItem = ItemsDataUtils.findByName("Cosmetics", "Outfits", data.equipped.Outfits)
+		if outfitItem then OutfitApplier.Apply(char, outfitItem) end
 	end
 end
 
@@ -511,21 +382,8 @@ obsItem:onChange(function()
 		-- SHOW PREVIEW
 		if option == "Weapons" then
 			local data = peek(playerData)
-			local equippedSkinData = nil
-			local skinName = "Default"
-
-			if data and data.equipped and data.equipped.WeaponSkins then
-				skinName = data.equipped.WeaponSkins
-			end
-
-			if ItemsData.Arsenal and ItemsData.Arsenal.WeaponSkins then
-				for _, s in ItemsData.Arsenal.WeaponSkins do
-					if s.Name == skinName then
-						equippedSkinData = s
-						break
-					end
-				end
-			end
+			local skinName = (data and data.equipped and data.equipped.WeaponSkins) or "Default"
+			local equippedSkinData = ItemsDataUtils.findByName("Arsenal", "WeaponSkins", skinName)
 
 			spawnWeapon(item.Name, equippedSkinData)
 		elseif option == "WeaponSkins" then
@@ -551,13 +409,7 @@ obsItem:onChange(function()
 
 		-- Auto-Equipar si se tiene (Owned)
 		local data = peek(playerData)
-		local isOwned = false
-		if data.inventory and data.inventory[option] then
-			for _, name in data.inventory[option] do
-				if name == item.Name then isOwned = true; break end
-			end
-		end
-		if item.Name == "Default" then isOwned = true end
+		local isOwned = ItemsDataUtils.isItemOwned(data, option, item.Name)
 
 		if isOwned and equipItemRF then
 			-- Check if already equipped to avoid redundant calls
@@ -565,9 +417,9 @@ obsItem:onChange(function()
 				return
 			end
 
-			-- OPTIMISTIC UPDATE: Auto-equip locally immediately
+			-- OPTIMISTIC UPDATE: Auto-equip locally immediately (deep-clone nested tables)
 			local newData = table.clone(peek(playerData))
-			if not newData.equipped then newData.equipped = {} end
+			newData.equipped = table.clone(newData.equipped or {})
 			newData.equipped[option] = item.Name
 			playerData:set(newData)
 
@@ -600,7 +452,7 @@ end
 -- Observer para cambio de Tab (para cambiar de escena Weapon <-> Character)
 local obsTab = Observer(scope, selectedTab)
 obsTab:onChange(function()
-	updatePreviewScene()
+	-- updatePreviewScene() -- Redundante, obsOption ya lo maneja al cambiar de tab (que cambia option)
 end)
 
 local currentCameraTarget = "Locker"
@@ -609,6 +461,9 @@ local currentCameraTarget = "Locker"
 local obsOption = Observer(scope, selectedOption)
 obsOption:onChange(function()
 	if not peek(isStoreOpen) then return end
+
+	-- Restaurar preview al cambiar de opción (ej: Faces -> Hats debe resetear la Face preview)
+	updatePreviewScene()
 
 	local option = peek(selectedOption)
 	local targetName = (option == "KillEffects") and "KillEffects" or "Locker"
@@ -658,9 +513,7 @@ local function setStoreState(isOpen)
 		-- Force default tab/option when opening
 		selectedTab:set("Arsenal")
 		selectedOption:set("Weapons")
-
-		-- Pre-spawn KillEffectDummy so it's ready
-		spawnKillEffectDummy(false)
+		-- KillEffectDummy will be lazily spawned when the tab is selected
 	end
 
 	isStoreOpen:set(isOpen)
@@ -831,33 +684,9 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 		})
 
 		-- Helper para verificar propiedad
-		local function checkOwnership(itemName: string): boolean
-			if not data.inventory then return false end
-			local categoryInv = data.inventory[currentOption] -- e.g. inventory.Faces
-			if not categoryInv then return false end
-
-			-- Si es una lista de strings (nombres)
-			for _, ownedName in categoryInv do
-				if ownedName == itemName then
-					return true
-				end
-			end
-			return false
-		end
-
-		-- Helper para verificar equipado
-		local function checkEquipped(itemName: string): boolean
-			if not data.equipped then return false end
-			local equippedItem = data.equipped[currentOption] -- e.g. equipped.Faces
-			return equippedItem == itemName
-		end
-
 		for i, item in items do
-			local isOwned = checkOwnership(item.Name)
-			local isEquipped = checkEquipped(item.Name)
-
-			-- Hack temporal por si el Inventory no tiene "Default" explícito en listas vacías
-			if item.Name == "Default" then isOwned = true end
+			local isOwned = ItemsDataUtils.isItemOwned(data, currentOption, item.Name)
+			local isEquipped = data.equipped and data.equipped[currentOption] == item.Name
 
 			-- Pre-calcular estado para ordenamiento estable luego si es necesario
 			item._isOwned = isOwned
@@ -888,9 +717,7 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 			local isEquipped = item._isEquipped
 
 			-- Verificar bloqueo por nivel
-			local requiredLevel = item.Level or 0
-			local playerLevel = data.level or 0
-			local isLevelLocked = requiredLevel > 0 and playerLevel < requiredLevel
+			local isLevelLocked = ItemsDataUtils.isLevelLocked(item, data)
 
 			if currentOption == "WeaponSkins" then
 				table.insert(cards, SkinCard(scope, {
@@ -936,7 +763,7 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 					isOwned = isOwned,
 					isEquipped = isEquipped,
 					isLevelLocked = isLevelLocked,
-					requiredLevel = requiredLevel,
+					requiredLevel = item.Level or 0,
 					isSelected = Computed(scope, function(use)
 						local current = use(selectedItem)
 						return current and current.Name == item.Name
@@ -1145,13 +972,9 @@ local storeGui = scope:New "ScreenGui" {
 				local item = use(selectedItem)
 				if not item then return "0" end
 
-				-- Check for level lock to display "LEVEL X" or Price
 				local data = use(playerData)
-				local requiredLevel = item.Level or 0
-				local playerLevel = data.level or 0
-
-				if requiredLevel > 0 and playerLevel < requiredLevel then
-					return "LEVEL " .. tostring(requiredLevel)
+				if ItemsDataUtils.isLevelLocked(item, data) then
+					return "LEVEL " .. tostring(item.Level or 0)
 				else
 					return tostring(item.Price)
 				end
@@ -1162,23 +985,12 @@ local storeGui = scope:New "ScreenGui" {
 
 				local data = use(playerData)
 
-				local requiredLevel = item.Level or 0
-				local playerLevel = data.level or 0
-
-				-- 1. Locked check
-				if requiredLevel > 0 and playerLevel < requiredLevel then
+				if ItemsDataUtils.isLevelLocked(item, data) then
 					return "LOCKED"
 				end
 
-				-- 2. Ownership check
 				local currentOption = use(selectedOption)
-				local isOwned = false
-				if data.inventory and data.inventory[currentOption] then
-					for _, name in data.inventory[currentOption] do
-						if name == item.Name then isOwned = true; break end
-					end
-				end
-				if item.Name == "Default" then isOwned = true end
+				local isOwned = ItemsDataUtils.isItemOwned(data, currentOption, item.Name)
 
 				return isOwned and "EQUIP" or "PURCHASE"
 			end),
@@ -1187,43 +999,24 @@ local storeGui = scope:New "ScreenGui" {
 				if not item then return false end
 
 				local data = use(playerData)
-				local requiredLevel = item.Level or 0
-				local playerLevel = data.level or 0
-
-				return requiredLevel > 0 and playerLevel < requiredLevel
+				return ItemsDataUtils.isLevelLocked(item, data)
 			end),
 			isVisible = Computed(scope, function(use)
 				local item = use(selectedItem)
 				if not item then return false end
 
-				-- Hide if owned (auto-equip handles it without explicit button), UNLESS it's locked (should show locked state)
-				-- or if we want to allow equipping explicitly via button (which logic above suggests: "EQUIP")
-
-				-- Actually, the original logic hid the button if owned or Default.
-				-- But wait, the title logic has an "EQUIP" state. So why hide it if owned?
-				-- Original logic:
-				-- if data.inventory... return false end
-				-- return true
-
-				-- If we want to show "LOCKED", we must verify this.
-				-- If it's locked, we definitely want to show it.
-
 				local data = use(playerData)
-				local requiredLevel = item.Level or 0
-				local playerLevel = data.level or 0
 
-				if requiredLevel > 0 and playerLevel < requiredLevel then
-					return true -- Perform show for LOCKED
+				-- Show if locked (display LOCKED state)
+				if ItemsDataUtils.isLevelLocked(item, data) then
+					return true
 				end
 
+				-- Hide if owned (auto-equip handles it)
 				local currentOption = use(selectedOption)
-
-				if data.inventory and data.inventory[currentOption] then
-					for _, name in data.inventory[currentOption] do
-						if name == item.Name then return false end
-					end
+				if ItemsDataUtils.isItemOwned(data, currentOption, item.Name) then
+					return false
 				end
-				if item.Name == "Default" then return false end
 
 				return true
 			end),
@@ -1235,28 +1028,20 @@ local storeGui = scope:New "ScreenGui" {
 					local currentTab = peek(selectedTab)
 
 					-- Check Locked
-					local requiredLevel = item.Level or 0
-					local playerLevel = data.level or 0
-					if requiredLevel > 0 and playerLevel < requiredLevel then
+					if ItemsDataUtils.isLevelLocked(item, data) then
 						print("Item locked")
-						return -- Do nothing if locked
+						return
 					end
 
 					-- Check ownership
-					local isOwned = false
-					if data.inventory and data.inventory[currentOption] then
-						for _, name in data.inventory[currentOption] do
-							if name == item.Name then isOwned = true; break end
-						end
-					end
-					if item.Name == "Default" then isOwned = true end
+					local isOwned = ItemsDataUtils.isItemOwned(data, currentOption, item.Name)
 
 					if isOwned then
 						-- EQUIP
 						if equipItemRF then
 							print("Equipping:", item.Name)
 							equipItemRF:InvokeServer(currentOption, item.Name)
-							selectedItem:set(nil) -- Clear selection triggers restorePreview
+							selectedItem:set(nil)
 						else
 							warn("Remote EquipItem no encontrado")
 						end
@@ -1266,25 +1051,20 @@ local storeGui = scope:New "ScreenGui" {
 							local success, msg = buyItemRF:InvokeServer(currentTab, currentOption, item.Name)
 							if success then
 								print("Compra exitosa:", item.Name)
-								-- Auto-equip
 								if equipItemRF then
 									equipItemRF:InvokeServer(currentOption, item.Name)
 								end
 
-								-- OPTIMISTIC UPDATE: Add to inventory and equip locally
+								-- OPTIMISTIC UPDATE: Deep-clone nested tables to avoid mutation
 								local newData = table.clone(peek(playerData))
-
-								-- 1. Add to inventory
-								if not newData.inventory then newData.inventory = {} end
-								if not newData.inventory[currentOption] then newData.inventory[currentOption] = {} end
+								newData.inventory = table.clone(newData.inventory or {})
+								newData.inventory[currentOption] = table.clone(newData.inventory[currentOption] or {})
 								table.insert(newData.inventory[currentOption], item.Name)
 
-								-- 2. Equip
-								if not newData.equipped then newData.equipped = {} end
+								newData.equipped = table.clone(newData.equipped or {})
 								newData.equipped[currentOption] = item.Name
 
 								playerData:set(newData)
-
 								selectedItem:set(nil)
 							else
 								warn("Error al comprar:", msg)

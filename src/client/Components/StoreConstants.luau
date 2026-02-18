@@ -63,4 +63,22 @@ StoreConstants.NavOptions = {
 	},
 }
 
+-- Animation IDs (shared across LockerUI, OutfitCard, etc.)
+StoreConstants.AnimationIds = {
+	Idle = "rbxassetid://77576237797818",
+}
+
+-- Spawn location names in Workspace.Locker
+StoreConstants.SpawnNames = {
+	Character = "CharacterSpawn",
+	Weapon = "WeaponSpawn",
+	KillEffect = "KillEffectSpawn",
+}
+
+-- Camera part names in Workspace.Cameras
+StoreConstants.CameraNames = {
+	Locker = "Locker",
+	KillEffects = "KillEffects",
+}
+
 return StoreConstants

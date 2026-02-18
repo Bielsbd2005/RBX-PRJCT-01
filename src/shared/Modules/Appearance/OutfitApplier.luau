@@ -1,17 +1,21 @@
 --[[
 	OutfitApplier
 	Módulo para aplicar outfits a un personaje.
+	Uses SkinApplier for texture creation to avoid duplication.
 ]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SkinApplier = require(ReplicatedStorage.Shared.Modules.Appearance.SkinApplier)
 
 local OutfitApplier = {}
 
 function OutfitApplier.Apply(character: Model, outfitData: { [string]: any })
 	if not character or not outfitData then return end
 
-	local clothingFolder = character:FindFirstChild("Clothing")
-	if not clothingFolder then return end
+	local targetFolder = character:FindFirstChild("Clothing") or character
+	if not targetFolder then return end
 
-	for _, part in clothingFolder:GetChildren() do
+	for _, part in targetFolder:GetChildren() do
 		if not part:IsA("BasePart") then continue end
 
 		-- Parte de arriba (Shirts)
@@ -20,8 +24,7 @@ function OutfitApplier.Apply(character: Model, outfitData: { [string]: any })
 			part.Material = outfitData.ShirtMaterial or Enum.Material.Plastic
 			part.Transparency = 0 -- Asegurar visible
 
-			-- Limpiar texturas anteriores si existen y queremos reemplazarlas limpiamente
-			-- (O simplemente añadir nuevas encima, pero mejor limpiar)
+			-- Limpiar texturas anteriores
 			for _, child in part:GetChildren() do
 				if child:IsA("Texture") and string.find(child.Name, "ShirtTexture_") then
 					child:Destroy()
@@ -29,17 +32,12 @@ function OutfitApplier.Apply(character: Model, outfitData: { [string]: any })
 			end
 
 			if outfitData.ShirtTextureID and outfitData.ShirtTextureID ~= "" then
-				for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
-					local t = Instance.new("Texture")
-					t.Name = "ShirtTexture_" .. face.Name
-					t.Face = face
-					t.Texture = outfitData.ShirtTextureID
-					t.Transparency = outfitData.ShirtTextureTransparency or 0
-					t.StudsPerTileU = outfitData.ShirtStudsPerTile or 1
-					t.StudsPerTileV = outfitData.ShirtStudsPerTile or 1
-                    t.Color3 = Color3.new(1,1,1)
-					t.Parent = part
-				end
+				SkinApplier.applyTexturesToPart(part, outfitData.ShirtTextureID, {
+					namePrefix = "ShirtTexture_",
+					transparency = outfitData.ShirtTextureTransparency or 0,
+					studsPerTile = outfitData.ShirtStudsPerTile or 1,
+					color = Color3.new(1, 1, 1),
+				})
 			end
 
 		-- Parte de abajo (Pants)

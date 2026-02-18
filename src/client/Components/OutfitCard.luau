@@ -4,10 +4,10 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local _RunService = game:GetService("RunService")
 
 local Fusion = require(ReplicatedStorage.Packages.fusion)
-local New = Fusion.New
+local _New = Fusion.New
 local Children = Fusion.Children
 local OnEvent = Fusion.OnEvent
 local Value = Fusion.Value
@@ -90,47 +90,17 @@ local function OutfitCard(scope: Fusion.Scope<typeof(Fusion)>, props: {
 			updatedCenter.Position + Vector3.new(0, DESPLAZAMIENTO_Y, 0)
 		)
 
-		-- 4. APLICAR OUTFIT
-		local data = props.outfitData
-
-		for _, part in clonedChar:GetChildren() do
-			if not part:IsA("BasePart") then continue end
-
-			-- Parte de arriba (Shirts)
-			if string.find(part.Name, "T%-Shirt") then
-					part.Color = data.ShirtBaseColor or part.Color
-					part.Material = data.ShirtMaterial or Enum.Material.Plastic
-					part.Transparency = 0 -- Asegurar visible
-
-					if data.ShirtTextureID and data.ShirtTextureID ~= "" then
-						for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
-							local t = Instance.new("Texture")
-							t.Name = "ShirtTexture_" .. face.Name
-							t.Face = face
-							t.Texture = data.ShirtTextureID
-							t.Transparency = data.ShirtTextureTransparency or 0
-							t.StudsPerTileU = data.ShirtStudsPerTile or 1
-							t.StudsPerTileV = data.ShirtStudsPerTile or 1
-                            t.Color3 = Color3.new(1,1,1)
-							t.Parent = part
-						end
-					end
-
-				-- Parte de abajo (Pants)
-				elseif string.find(part.Name, "Pant") then
-					part.Color = data.PantColor or part.Color
-					part.Material = data.PantMaterial or Enum.Material.Plastic
-					part.Transparency = 0 -- Asegurar visible
-				end
-
-		end
+		-- 4. APLICAR OUTFIT using shared module
+		local OutfitApplier = require(ReplicatedStorage.Shared.Modules.Appearance.OutfitApplier)
+		OutfitApplier.Apply(clonedChar, props.outfitData)
 
 		-- Animación Idle (opcional, si tiene humanoide)
+		local Constants = require(script.Parent.StoreConstants)
 		local humanoid = clonedChar:FindFirstChild("Humanoid")
 		local animator = humanoid and humanoid:FindFirstChild("Animator")
 		if animator then
 			local animation = Instance.new("Animation")
-			animation.AnimationId = "rbxassetid://77576237797818" -- Misma anim que en Locker
+			animation.AnimationId = Constants.AnimationIds.Idle
 			local track = animator:LoadAnimation(animation)
 			track.Looped = true
 			track:Play()

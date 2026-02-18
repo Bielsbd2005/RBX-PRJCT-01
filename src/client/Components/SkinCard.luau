@@ -4,10 +4,10 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local _RunService = game:GetService("RunService")
 
 local Fusion = require(ReplicatedStorage.Packages.fusion)
-local New = Fusion.New
+local _New = Fusion.New
 local Children = Fusion.Children
 local OnEvent = Fusion.OnEvent
 local Value = Fusion.Value
@@ -20,9 +20,6 @@ local DISTANCIA_MULTIPLIER = 0.52
 local ROTACION_X = 0
 local ROTACION_Y = 130
 local ROTACION_Z = -12
-local TILE_SIZE = 2 -- Debe coincidir con StudsPerTile para evitar saltos
-local TEXTURE_SPEED_U = 0.5
-local TEXTURE_SPEED_V = 0
 local DESPLAZAMIENTO_X = 0.2
 
 local function SkinCard(scope: Fusion.Scope<typeof(Fusion)>, props: {
@@ -61,8 +58,7 @@ local function SkinCard(scope: Fusion.Scope<typeof(Fusion)>, props: {
 	local viewportRef = Value(scope, nil)
 
 	-- Estado para la animación de textura
-	local currentOffsetU = Value(scope, 0)
-	local currentOffsetV = Value(scope, 0)
+
 
 	-- Setup del ViewportFrame (Cámara y Modelo)
 	local function setupViewport(vp: ViewportFrame)
@@ -110,96 +106,15 @@ local function SkinCard(scope: Fusion.Scope<typeof(Fusion)>, props: {
 			updatedCenter.Position
 		) * CFrame.new(-DESPLAZAMIENTO_X, 0, 0) -- Desplazamos la cámara a la izquierda
 
-		-- 4. APLICAR SKIN (Texturas y Materiales)
-		local textures = {}
+		-- 4. APLICAR SKIN using shared module
+		local SkinApplier = require(ReplicatedStorage.Shared.Modules.Appearance.SkinApplier)
 		local data = props.skinData
+		local textures = SkinApplier.apply(clonedModel, data)
 
-		for _, part in clonedModel:GetDescendants() do
-			if part:IsA("BasePart") then
-				-- Skip invisible parts (hitboxes, etc.) to save memory/draw calls
-				if part.Transparency == 1 then
-					continue
-				end
-
-				-- Lógica para SecondaryPart (Sobriscribe el estilo principal)
-				if part.Name == "SecondaryPart" then
-					part.Color = data.SecondaryPartColor or part.Color
-
-					if data.SecondaryMaterial then
-						part.Material = data.SecondaryMaterial
-					end
-
-					if part:IsA("MeshPart") then
-						part.TextureID = data.SecondaryPartTexture or ""
-					elseif data.SecondaryPartTexture and data.SecondaryPartTexture ~= "" then
-						for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
-							local t = Instance.new("Texture")
-							t.Name = "SecondaryTexture_" .. face.Name
-							t.Face = face
-							t.Texture = data.SecondaryPartTexture
-							t.Transparency = data.TextureTransparency or 0
-							t.StudsPerTileU = data.StudsPerTile or TILE_SIZE
-							t.StudsPerTileV = data.StudsPerTile or TILE_SIZE
-							t.Color3 = Color3.new(1,1,1)
-							t.Parent = part
-							table.insert(textures, t)
-						end
-					end
-
-				-- Lógica para el resto del modelo (Estilo Principal)
-				else
-					part.Color = data.BaseColor
-					part.Material = data.Material or Enum.Material.Plastic
-
-					-- Aplicar texturas en todas las caras si TextureID existe y no es vacío/nil
-					if data.TextureID and data.TextureID ~= "" then
-						for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
-							local t = Instance.new("Texture")
-							t.Name = "SkinTexture_" .. face.Name
-							t.Face = face
-							t.Texture = data.TextureID
-							t.Transparency = data.TextureTransparency or 0
-							t.StudsPerTileU = data.StudsPerTile or TILE_SIZE
-							t.StudsPerTileV = data.StudsPerTile or TILE_SIZE
-							t.Color3 = data.TextureColor or Color3.new(1,1,1)
-							t.Parent = part
-							table.insert(textures, t)
-						end
-					end
-				end
-			end
-		end
-
-		-- 5. ANIMACIÓN
-		-- Si es Animated, forzamos animación incluso si no hay textura definida (para texturas procedurales o lógica futura)
-		-- O si hay TextureID/SecondaryPartTexture.
-		if data.Animated or (data.TextureID and data.TextureID ~= "") or (data.SecondaryPartTexture and data.SecondaryPartTexture ~= "") then
-			local connection
-			connection = RunService.RenderStepped:Connect(function(dt)
-				if not vp or not vp.Parent then
-					if connection then connection:Disconnect() end
-					return
-				end
-
-				-- Solo animar si data.Animated es true
-				if data.Animated then
-					local u = Fusion.peek(currentOffsetU)
-					local v = Fusion.peek(currentOffsetV)
-
-					local newU = (u + TEXTURE_SPEED_U * dt) % (data.StudsPerTile or TILE_SIZE)
-					local newV = (v + TEXTURE_SPEED_V * dt) % (data.StudsPerTile or TILE_SIZE)
-
-					currentOffsetU:set(newU)
-					currentOffsetV:set(newV)
-
-					for _, t in textures do
-						t.OffsetStudsU = newU
-						t.OffsetStudsV = newV
-					end
-				end
-			end)
-			-- Ensure connection is cleaned up when scope is destroyed
-			table.insert(scope, connection)
+		-- 5. ANIMACIÓN using shared module (uses Heartbeat, not RenderStepped)
+		local animConnection = SkinApplier.startAnimation(textures, data, vp)
+		if animConnection then
+			table.insert(scope, { Destroy = function() animConnection:Disconnect() end })
 		end
 	end
 
