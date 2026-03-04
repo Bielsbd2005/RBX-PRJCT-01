@@ -7,6 +7,8 @@ local DataTemplate: ProfileData = {
 	xp = 0,
 	cash = 100,
 	gems = 0,
+	luckySpins = 0,
+	caseSpins = {["Wood"] = 2,}, -- Ej: { ["Wood"] = 2, ["Metal"] = 0 }
 
 	-- Estadísticas
 	stats = {

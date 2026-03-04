@@ -596,6 +596,165 @@ local function AddItemField(scope, props: { path: string, currentItems: { string
 	}
 end
 
+--- Campo para añadir un par clave-valor a un diccionario (ej: caseSpins)
+local function AddDictField(scope, props: { path: string, currentData: { [string]: any }, depth: number })
+	local inputKey = Value(scope, "")
+	local inputValue = Value(scope, "")
+	local isHovered = Value(scope, false)
+
+	local function onAdd()
+		local keyRaw = peek(inputKey)
+		local valRaw = peek(inputValue)
+
+		if keyRaw == "" or valRaw == "" then
+			statusMessage:set("✗ Completa clave y valor")
+			statusColor:set(Colors.Red)
+			return
+		end
+
+		local numVal = tonumber(valRaw)
+		if not numVal then
+			statusMessage:set("✗ El valor debe ser numérico")
+			statusColor:set(Colors.Red)
+			return
+		end
+
+		-- Crear copia del diccionario y añadir
+		local newData = {}
+		for k, v in props.currentData do
+			newData[k] = v
+		end
+		newData[keyRaw] = numVal
+
+		inputKey:set("")
+		inputValue:set("")
+		saveChange(props.path, newData)
+	end
+
+	return scope:New "Frame" {
+		Name = "AddDict_" .. props.path,
+		BackgroundColor3 = Computed(scope, function(use)
+			if use(isHovered) then return Colors.PanelLight end
+			return Color3.new(0, 0, 0)
+		end),
+		BackgroundTransparency = Computed(scope, function(use)
+			return use(isHovered) and 0.5 or 1
+		end),
+		Size = UDim2.new(1, 0, 0, 36),
+		LayoutOrder = 99999, -- Que aparezca al final de la sección
+
+		[OnEvent "MouseEnter"] = function()
+			isHovered:set(true)
+		end,
+		[OnEvent "MouseLeave"] = function()
+			isHovered:set(false)
+		end,
+
+		[Children] = {
+			scope:New "UIPadding" {
+				PaddingLeft = UDim.new(0, 12 + (props.depth or 0) * 16),
+				PaddingRight = UDim.new(0, 8),
+			},
+
+			-- Label
+			scope:New "TextLabel" {
+				Name = "AddLabel",
+				BackgroundTransparency = 1,
+				FontFace = FONT_UI,
+				Size = UDim2.fromScale(0.20, 1),
+				Text = "+ Clave: Valor",
+				TextColor3 = Colors.Green,
+				TextSize = 14,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			},
+
+			-- Input Key
+			scope:New "TextBox" {
+				Name = "InputKey",
+				AnchorPoint = Vector2.new(0, 0.5),
+				BackgroundColor3 = Colors.InputBg,
+				Position = UDim2.new(0.20, 4, 0.5, 0),
+				Size = UDim2.new(0.35, -4, 0, 26),
+				FontFace = FONT_MONO,
+				Text = inputKey,
+				PlaceholderText = "Mbox...",
+				PlaceholderColor3 = Colors.TextMuted,
+				TextColor3 = Colors.Text,
+				TextSize = 14,
+				ClearTextOnFocus = false,
+				ClipsDescendants = true,
+
+				[OnChange "Text"] = function(newText)
+					inputKey:set(newText)
+				end,
+
+				[Children] = {
+					scope:New "UICorner" { CornerRadius = UDim.new(0, 4) },
+					scope:New "UIPadding" {
+						PaddingLeft = UDim.new(0, 6),
+						PaddingRight = UDim.new(0, 6),
+					},
+				},
+			},
+
+			-- Input Value
+			scope:New "TextBox" {
+				Name = "InputValue",
+				AnchorPoint = Vector2.new(0, 0.5),
+				BackgroundColor3 = Colors.InputBg,
+				Position = UDim2.new(0.55, 4, 0.5, 0),
+				Size = UDim2.new(0.25, -4, 0, 26),
+				FontFace = FONT_MONO,
+				Text = inputValue,
+				PlaceholderText = "10",
+				PlaceholderColor3 = Colors.TextMuted,
+				TextColor3 = Colors.Text,
+				TextSize = 14,
+				ClearTextOnFocus = false,
+				ClipsDescendants = true,
+
+				[OnChange "Text"] = function(newText)
+					inputValue:set(newText)
+				end,
+
+				[OnEvent "FocusLost"] = function(enterPressed)
+					if enterPressed then
+						onAdd()
+					end
+				end,
+
+				[Children] = {
+					scope:New "UICorner" { CornerRadius = UDim.new(0, 4) },
+					scope:New "UIPadding" {
+						PaddingLeft = UDim.new(0, 6),
+						PaddingRight = UDim.new(0, 6),
+					},
+				},
+			},
+
+			-- ADD button
+			scope:New "TextButton" {
+				Name = "AddBtn",
+				AnchorPoint = Vector2.new(1, 0.5),
+				BackgroundColor3 = Colors.Green,
+				Position = UDim2.new(1, 0, 0.5, 0),
+				Size = UDim2.fromOffset(55, 24),
+				FontFace = FONT_UI_BOLD,
+				Text = "ADD",
+				TextColor3 = Color3.new(1, 1, 1),
+				TextSize = 13,
+				AutoButtonColor = false,
+
+				[OnEvent "Activated"] = onAdd,
+
+				[Children] = {
+					scope:New "UICorner" { CornerRadius = UDim.new(0, 4) },
+				},
+			},
+		},
+	}
+end
+
 --------------------------------------------------------------------------------
 -- Construir panel de datos dinámicamente
 --------------------------------------------------------------------------------
@@ -625,9 +784,13 @@ local function buildDataFields(scope, data, prefix, depth)
 				end
 			end
 
-			-- Tablas vacías se tratan como arrays
+			-- Tablas vacías se tratan como arrays EXCEPTO si es caseSpins o stats
 			if next(value) == nil then
-				isArray = true
+				if key == "caseSpins" or key == "stats" then
+					isArray = false
+				else
+					isArray = true
+				end
 			end
 
 			if isArray then
@@ -653,6 +816,16 @@ local function buildDataFields(scope, data, prefix, depth)
 					name = key,
 					depth = depth,
 				}))
+
+				-- Añadir tool de insertar en dict para caseSpins y stats
+				if key == "caseSpins" or key == "stats" then
+					table.insert(fields, AddDictField(scope, {
+						path = path,
+						currentData = value,
+						depth = depth + 1,
+					}))
+				end
+
 				local subFields = buildDataFields(scope, value, path, depth + 1)
 				for _, f in subFields do
 					table.insert(fields, f)

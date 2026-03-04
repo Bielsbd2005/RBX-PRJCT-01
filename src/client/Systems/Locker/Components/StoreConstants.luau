@@ -81,4 +81,60 @@ StoreConstants.CameraNames = {
 	KillEffects = "KillEffects",
 }
 
+-- Rarity-based color themes for item cards
+StoreConstants.RarityThemes = {
+	Legendary = {
+		Background   = Color3.fromRGB(253, 236, 118),
+		ImageColor   = Color3.fromRGB(238, 184, 95),
+		Stroke       = Color3.fromRGB(249, 181, 73),
+		RarityText   = Color3.new(1, 1, 1),
+		RarityStroke = Color3.fromRGB(200, 154, 57),
+	},
+	Epic = {
+		Background   = Color3.fromRGB(224, 126, 255),
+		ImageColor   = Color3.fromRGB(186, 98, 255),
+		Stroke       = Color3.fromRGB(172, 0, 247),
+		RarityText   = Color3.fromRGB(255, 210, 255),
+		RarityStroke = Color3.fromRGB(161, 60, 241),
+	},
+	Rare = {
+		Background   = Color3.fromRGB(184, 220, 255),
+		ImageColor   = Color3.fromRGB(151, 190, 240),
+		Stroke       = Color3.fromRGB(92, 132, 236),
+		RarityText   = Color3.fromRGB(235, 244, 231),
+		RarityStroke = Color3.fromRGB(114, 162, 220),
+	},
+	Common = {
+		Background   = Color3.fromRGB(202, 202, 202),
+		ImageColor   = Color3.fromRGB(229, 229, 229),
+		Stroke       = Color3.fromRGB(162, 162, 162),
+		RarityText   = Color3.new(1, 1, 1),
+		RarityStroke = Color3.fromRGB(143, 143, 143),
+	},
+	Limited = {
+		Background   = Color3.fromRGB(240, 102, 102),
+		ImageColor   = Color3.fromRGB(155, 0, 11),
+		Stroke       = Color3.fromRGB(155, 0, 11),
+		RarityText   = Color3.fromRGB(255, 151, 136),
+		RarityStroke = Color3.fromRGB(155, 0, 11),
+	},
+}
+
+-- Convenience: get theme for a rarity string (case-insensitive first letter)
+function StoreConstants.getTheme(rarity: string)
+	local key = rarity and (rarity:sub(1,1):upper() .. rarity:sub(2):lower()) or "Common"
+	return StoreConstants.RarityThemes[key] or StoreConstants.RarityThemes.Common
+end
+
+-- Layout constants for rarity/price labels (matching user templates)
+StoreConstants.CardLayout = {
+	RarityPosition = UDim2.fromScale(0, 0.0225),
+	RaritySize     = UDim2.fromScale(1, 0.1685),
+	RarityStrokeThickness = 2.1,
+	RarityMaxTextSize = 46,
+	PricePosition  = UDim2.fromScale(0.422, 0.8145),
+	PriceSize      = UDim2.fromScale(0.578, 0.129),
+	PriceMaxTextSize = 42,
+}
+
 return StoreConstants

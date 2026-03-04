@@ -59,36 +59,71 @@ end
 local ItemsData: { [string]: CategoryData } = {
 	Arsenal = {
 		Weapons = {
-			{
-				Name = "Default",
-				Price = 0,
-				Level = 0,
-				Rarity = "Rare",
-				Image = asset(110518081864282),
-			},
-			{
-				Name = "Weapon2",
-				Price = 2,
-				Level = 0,
-				Rarity = "Rare",
-				Image = asset(108946658716262),
-			},
-			{
-				Name = "Weapon3",
-				Price = 3,
-				Level = 3,
-				Rarity = "Rare",
-				Image = asset(87132897706192),
-			},
-			-- ... (Puedes comprimir líneas si prefieres legibilidad vertical)
+			{ Name = "Default", Price = 0, Level = 0, Rarity = "Rare", Image = asset(110518081864282), },
+			{ Name = "Weapon2", Price = 2, Level = 0, Rarity = "Rare", Image = asset(108946658716262), },
+			{ Name = "Weapon3", Price = 3, Level = 3, Rarity = "Rare", Image = asset(87132897706192), },
 			{ Name = "Weapon4", Price = 4, Level = 4, Rarity = "Rare", Image = asset(124132998559200) },
 			{ Name = "Weapon5", Price = 5, Level = 5, Rarity = "Rare", Image = asset(72433429395276) },
 			{ Name = "Weapon6", Price = 6, Level = 6, Rarity = "Rare", Image = asset(102465718265447) },
 			{ Name = "Weapon",  Price = 7, Level = 7, Rarity = "Rare", Image = asset(76043980713122) },
 		},
 		WeaponSkins = {
+			--Wood Case
+			{ Name = "SK_0001", Rarity = "Common", BaseColor = rgb(85, 107, 47) },
+			{ Name = "SK_0002", Rarity = "Common", BaseColor = rgb(153, 153, 102) },
+			{ Name = "SK_0003", Rarity = "Common", BaseColor = rgb(72, 60, 50) },
+			{ Name = "SK_0004", Rarity = "Common", BaseColor = rgb(112, 128, 144) },
+			{ Name = "SK_0005", Rarity = "Common", BaseColor = rgb(124, 92, 70) },
+			{ Name = "SK_0006", Rarity = "Common", BaseColor = rgb(137, 82, 76) },
+			{ Name = "SK_0007", Rarity = "Common", BaseColor = rgb(135, 152, 131) },
+			{ Name = "SK_0008", Rarity = "Common", BaseColor = rgb(148, 110, 100) },
+			{ Name = "SK_0009", Rarity = "Common", BaseColor = rgb(132, 123, 234) },
+			{ Name = "SK_0010", Rarity = "Common", BaseColor = rgb(116, 187, 128) },
+			{ Name = "SK_0011", Rarity = "Common", BaseColor = rgb(167, 134, 132) },
+			{ Name = "SK_0012", Rarity = "Common", BaseColor = rgb(116, 101, 93) },
+
+			{ Name = "SK_0013", Rarity = "Rare", TextureID = asset(130322972742517), },
+			{ Name = "SK_0014", Rarity = "Rare", TextureID = asset(10051794906), },
+			{ Name = "SK_0015", Rarity = "Rare", TextureID = asset(123547146579229), },
+			{ Name = "SK_0016", Rarity = "Rare", TextureID = asset(103708014906089), },
+			{ Name = "SK_0017", Rarity = "Rare", TextureID = asset(86966645142772), },
+			{ Name = "SK_0018", Rarity = "Rare", TextureID = asset(125993063395893), },
+
+			{ Name = "SK_0019", Rarity = "Epic", TextureID = asset(103421183730012), Animated = true, StudsPerTile = 3},
+			{ Name = "SK_0020", Rarity = "Epic", TextureID = asset(103421183730012), Animated = true, StudsPerTile = 3},
+			{ Name = "SK_0021", Rarity = "Epic", TextureID = asset(1034211837), Animated = true, StudsPerTile = 3},
+
 			{
-				Name = "PinkDream",
+				Name = "SK_0022",
+				Rarity = "Legendary",
+
+				-- Primary
+				BaseColor = rgb(172, 138, 177),
+				TextureID = asset(120705640412089),
+				TextureColor = rgb(0, 0, 0),
+				Animated = true,
+				StudsPerTile = 1.181,
+				TextureTransparency = 0,
+
+				Particles = {
+					Enabled = true,
+					Texture = asset(138722900670829),
+					Color = ColorSequence.new(rgb(255, 255, 255)),
+					Size = NumberSequence.new(0.111, 0),
+					Lifetime = NumberRange.new(0.5, 1),
+					Rate = 10,
+					Speed = NumberRange.new(0.591, 0.591),
+				},
+
+				-- Secondary
+				SecondaryPartColor = rgb(255, 255, 255),
+				SecondaryPartTexture = "",
+				SecondaryMaterial = Enum.Material.SmoothPlastic,
+			},
+
+			--Magma Case
+			{
+				Name = "SK_000X",
 				Rarity = "Rare",
 
 				-- Primary
@@ -114,19 +149,11 @@ local ItemsData: { [string]: CategoryData } = {
 				SecondaryPartTexture = "",
 				SecondaryMaterial = Enum.Material.Salt,
 			},
-			{
-				Name = "Default",
-				Rarity = "Common",
-				BaseColor = rgb(255, 255, 255),
-			}
 		},
 		KillEffects = {
-			{
-				Name = "Default",
-				Price = 5,
-				Rarity = "Common",
-				Image = asset(79175047578893),
-			},
+			{ Name = "Default", Price = 5, Rarity = "Common", Image = asset(79175047578893), },
+			{ Name = "Gravity", Price = 5, Rarity = "Common", Image = asset(79175047578893), },
+			
 		},
 	},
 	Cosmetics = {

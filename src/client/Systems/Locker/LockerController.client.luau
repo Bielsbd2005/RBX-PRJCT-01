@@ -1,24 +1,23 @@
 --[[
-	Locker
-	Script principal de la Locker GUI.
-	Orquesta todos los componentes y gestiona el estado de la tienda.
+    Locker
+    Script principal de la Locker GUI.
+    Orquesta todos los componentes y gestiona el estado de la tienda.
 
-	Ruta: StarterPlayerScripts > Client > LockerUI
+    Ruta: StarterPlayerScripts > Client > LockerUI
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local _RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 -- Fusion 0.3 imports
 local Fusion = require(ReplicatedStorage.Packages.fusion)
 local scoped = Fusion.scoped
 local Children = Fusion.Children
-local OnEvent = Fusion.OnEvent
 local Value = Fusion.Value
 local Computed = Fusion.Computed
 local Spring = Fusion.Spring
 local peek = Fusion.peek
+local Observer = Fusion.Observer
 
 -- Componentes
 local NavButton = require(script.Parent.Components.NavButton)
@@ -33,6 +32,7 @@ local Constants = require(script.Parent.Components.StoreConstants)
 -- Shared modules
 local SkinApplier = require(ReplicatedStorage.Shared.Systems.Appearance.SkinApplier)
 local ItemsDataUtils = require(ReplicatedStorage.Shared.Systems.Locker.Data.ItemsDataUtils)
+local CasesUI = require(script.Parent.Parent.Cases.CasesUI)
 
 -- Jugador local
 local player = Players.LocalPlayer
@@ -46,6 +46,7 @@ local scope = scoped(Fusion)
 -- Estado reactivo
 --------------------------------------------------------------------------------
 local isStoreOpen = Value(scope, false)
+local isLockerVisible = Value(scope, true)
 
 -- Remotes
 local shopFolder = ReplicatedStorage:WaitForChild("Shop", 10)
@@ -55,33 +56,33 @@ local buyItemRF = shopFolder and shopFolder:WaitForChild("BuyItem", 10)
 -- Tab y opción seleccionados
 local selectedTab = Value(scope, "Arsenal")
 local selectedOption = Value(scope, "Weapons")
-local selectedItem = Value(scope, nil) -- { Name = string, Price = number } or nil
-local previewCharacter = Value(scope, nil) -- Character instance
-local previewWeapon = Value(scope, nil) -- Weapon model instance
+local selectedItem = Value(scope, nil)
+local previewCharacter = Value(scope, nil)
+local previewWeapon = Value(scope, nil)
 
--- Resolución de referencia (la UI se diseñó en 1920x1080)
+-- Resolución de referencia
 local REFERENCE_WIDTH = 1920
 local REFERENCE_HEIGHT = 1080
 
--- Escala dinámica según viewport
+-- Escala dinámica
 local camera = workspace.CurrentCamera
 local viewportSize = Value(scope, camera.ViewportSize)
 
-camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-	viewportSize:set(camera.ViewportSize)
-end)
+-- FIX: Añadido al scope para limpieza automática
+table.insert(scope, camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    viewportSize:set(camera.ViewportSize)
+end))
 
 local uiScale = Computed(scope, function(use)
-	local viewport = use(viewportSize)
-	local scaleX = viewport.X / REFERENCE_WIDTH
-	local scaleY = viewport.Y / REFERENCE_HEIGHT
-	return math.min(scaleX, scaleY)
+    local viewport = use(viewportSize)
+    local scaleX = viewport.X / REFERENCE_WIDTH
+    local scaleY = viewport.Y / REFERENCE_HEIGHT
+    return math.min(scaleX, scaleY)
 end)
 
 -- Gestor de Cámaras
 local CameraManager = require(ReplicatedStorage.Shared.Systems.Camera.CameraManager)
 local EffectsManager = require(script.Parent.Modules.EffectsManager)
-
 --------------------------------------------------------------------------------
 -- Funciones
 --------------------------------------------------------------------------------
@@ -327,17 +328,18 @@ local OutfitApplier = require(ReplicatedStorage.Shared.Systems.Appearance.Outfit
 local ItemsData = require(ReplicatedStorage.Shared.Systems.Locker.Data.ItemsData)
 local DataController = require(ReplicatedStorage.Shared.Systems.Data.DataController)
 
--- Estado reactivo de los datos del jugador (Global para usar en functions)
+-- Estado reactivo de los datos del jugador
 local playerData = Value(scope, DataController:Get() or {})
 
--- Escuchar cambios en los datos
 DataController:OnReady(function()
-	playerData:set(DataController:Get())
+    playerData:set(DataController:Get())
 end)
 
-local _conn_data = DataController:OnRawChange(function()
-	playerData:set(DataController:Get())
+-- FIX: Aseguramos la conexión en el scope para evitar Memory Leaks
+local conn_data = DataController:OnRawChange(function()
+    playerData:set(DataController:Get())
 end)
+table.insert(scope, conn_data)
 
 local function restorePreview()
 	local data = peek(playerData)
@@ -635,18 +637,20 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 		-- Filtro estricto para WeaponSkins: SOLO mostrar si se tienen en el inventario
 		if option == "WeaponSkins" then
 			local filtered = {}
-			local ownedSet = {}
+			local ownedCount = {}
 
 			if data.inventory and data.inventory.WeaponSkins then
 				for _, name in data.inventory.WeaponSkins do
-					ownedSet[name] = true
+					ownedCount[name] = (ownedCount[name] or 0) + 1
 				end
 			end
 			-- Always ensure Default is visible (safety fallback)
-			ownedSet["Default"] = true
+			ownedCount["Default"] = 1
 
 			for _, item in optionData do
-				if ownedSet[item.Name] then
+				if ownedCount[item.Name] and ownedCount[item.Name] > 0 then
+					-- Guardamos la cantidad temporalmente para poder ordenarlo u usarlo luego
+					item._ownedCount = ownedCount[item.Name]
 					table.insert(filtered, item)
 				end
 			end
@@ -669,8 +673,33 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 		-- UIListLayout / UIGridLayout siempre necesario
 		table.insert(cards, scope:New "UIGridLayout" {
 			Name = "UIGridLayout",
-			CellPadding = UDim2.fromScale(0.04, 0.03),
-			CellSize = UDim2.fromScale(0.3, 0.27),
+			-- Cuando AutomaticCanvasSize está activo, usar Scale en Y causa conflictos
+			-- Calculamos su equivalente en Offset basado en el viewport.
+			-- Re-calculamos offsets de celda pre-escala para que el UIScale superior
+			-- no achique las tarjetas injustamente, forzando idéntico tamaño físico a 1920x1080.
+			CellPadding = Computed(scope, function(use)
+				local vSize = use(viewportSize)
+				local scale = use(uiScale)
+				local rootWidth = vSize.X / scale
+				local gridWidth = rootWidth * 0.356 * 0.987
+
+				-- En 1920x1080 (GridWidth = 674.63px) el PadY era 24.69px.
+				local padY = gridWidth * (24.69 / 674.63)
+				return UDim2.new(0.04, 0, 0, padY)
+			end),
+
+			CellSize = Computed(scope, function(use)
+				local vSize = use(viewportSize)
+				local scale = use(uiScale)
+				local rootWidth = vSize.X / scale
+				local gridWidth = rootWidth * 0.356 * 0.987
+
+				local cellWidth = gridWidth * 0.3
+				-- En 1920x1080 (CellWidth = 202.39px) el Alto era 222.25px.
+				local cellHeight = cellWidth * (222.25 / 202.39)
+
+				return UDim2.new(0.3, 0, 0, cellHeight)
+			end),
 			HorizontalAlignment = Enum.HorizontalAlignment.Left,
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		})
@@ -680,7 +709,7 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 			PaddingBottom = UDim.new(0, 25),
 			PaddingLeft = UDim.new(0, 25),
 			PaddingRight = UDim.new(0, 25),
-			PaddingTop = UDim.new(0.006, 0),
+			PaddingTop = UDim.new(0, 15),
 		})
 
 		-- Helper para verificar propiedad
@@ -693,6 +722,14 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 			item._isEquipped = isEquipped
 		end
 
+		-- Pesos de rareza (Mayor número = más arriba)
+		local RARITY_WEIGHTS = {
+			Legendary = 4,
+			Epic = 3,
+			Rare = 2,
+			Common = 1
+		}
+
 		-- Clonar y ordenar
 		local sortedItems = table.clone(items)
 		table.sort(sortedItems, function(a, b)
@@ -701,14 +738,21 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 				return a._isOwned -- true > false
 			end
 
-			-- 2. Por precio (menor a mayor)
+			-- 2. Por rareza (de mayor a menor)
+			local rarityA = RARITY_WEIGHTS[a.Rarity] or 0
+			local rarityB = RARITY_WEIGHTS[b.Rarity] or 0
+			if rarityA ~= rarityB then
+				return rarityA > rarityB
+			end
+
+			-- 3. Por precio (menor a mayor)
 			local priceA = a.Price or 0
 			local priceB = b.Price or 0
 			if priceA ~= priceB then
 				return priceA < priceB
 			end
 
-			-- 3. Fallback por nombre
+			-- 4. Fallback por nombre
 			return a.Name < b.Name
 		end)
 
@@ -724,6 +768,7 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 					skinName = item.Name,
 					skinData = item,
 					isEquipped = isEquipped, -- Pass equipped state
+					ownedCount = item._ownedCount or 1, -- Pasamos la cuenta al SkinCard
 					equippedWeapon = Computed(scope, function(use)
 						local d = use(playerData)
 						return d.equipped and d.equipped.Weapons or "Default"
@@ -771,6 +816,7 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 					onClick = function()
 						selectedItem:set(item)
 					end,
+					category = currentOption,
 				}))
 			end
 		end
@@ -796,7 +842,25 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 				ImageTransparency = 0.14,
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(1, 1),
-				LayoutOrder = 9999, -- Ensure it's at the end
+				LayoutOrder = -1, -- Ensure it's at the beginning
+
+				[Fusion.OnEvent "Activated"] = function()
+					print("Opening Cases UI...")
+					isLockerVisible:set(false) -- Hide Locker UI
+					CasesUI.open(function()
+						-- Callback when CasesUI closes
+						print("Cases UI Closed")
+						isLockerVisible:set(true) -- Show Locker UI again
+
+						-- Optionally ensure Locker is in good state or camera reset
+						if peek(isStoreOpen) then
+							local cameraPart = workspace:WaitForChild("Cameras"):FindFirstChild("Locker")
+							if cameraPart then
+								CameraManager.setTarget(cameraPart, true, nil, 10)
+							end
+						end
+					end)
+				end,
 
 				[Children] = {
 					scope:New "UICorner" {
@@ -844,7 +908,31 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 
 	return scope:New "ScrollingFrame" {
 		Name = "ItemGrid",
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = Computed(scope, function(use)
+			local items = use(currentItems)
+			local count = #items
+			local option = use(selectedOption)
+
+			if option == "WeaponSkins" then
+				count = count + 1 -- Botón '+'
+			end
+
+			local rows = math.ceil(count / 3)
+			if rows == 0 then return UDim2.new(0, 0, 0, 0) end
+
+			local vSize = use(viewportSize)
+			local scale = use(uiScale)
+			local rootWidth = vSize.X / scale
+			local gridWidth = rootWidth * 0.356 * 0.987
+
+			local cellWidth = gridWidth * 0.3
+			local cellHeight = cellWidth * (222.25 / 202.39)
+			local padY = gridWidth * (24.69 / 674.63)
+
+			-- Top padding = 15, Bottom padding = 25
+			local totalHeight = (rows * cellHeight) + ((rows - 1) * padY) + 40
+			return UDim2.new(0, 0, 0, totalHeight)
+		end),
 		BackgroundTransparency = 1,
 		BottomImage = "",
 		Position = UDim2.fromScale(0, 0.014),
@@ -921,174 +1009,124 @@ local function createTabs(scope: Fusion.Scope<typeof(Fusion)>)
 	return tabs
 end
 
--- Posición X del Root: 0 (abierto, centrado) vs 1.5 (cerrado, desplazado a la derecha fuera de pantalla)
+-- Posición X del Root: 0 (abierto, centrado) vs 1.5 (cerrado)
 local rootXOffset = Spring(scope, Computed(scope, function(use)
-	return use(isStoreOpen) and 0 or 1.5 -- 1.5 lo saca completamente
+    return use(isStoreOpen) and 0 or 1.5
 end), 30, 0.8)
 
---------------------------------------------------------------------------------
--- ScreenGui principal
---------------------------------------------------------------------------------
 local storeGui = scope:New "ScreenGui" {
-	Name = "Locker",
-	Parent = player.PlayerGui,
-	Enabled = isStoreOpen, -- Vinculado: True al abrir (vemos anim), False al cerrar (desaparece)
-	IgnoreGuiInset = true,
-	ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets,
+    Name = "Locker",
+    Parent = player.PlayerGui,
+    Enabled = Computed(scope, function(use)
+        return use(isStoreOpen) and use(isLockerVisible)
+    end),
+    IgnoreGuiInset = true,
+    ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets,
 
-	[Children] = {
-		scope:New "UIScale" {
-			Scale = uiScale,
-		},
+    [Children] = {
+        scope:New "UIScale" {
+            Scale = uiScale,
+        },
 
-		-- Frame Raíz que mueve TODO el conjunto
-		scope:New "Frame" {
-			Name = "Root",
-			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 1),
+        scope:New "Frame" {
+            Name = "Root",
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            Position = Computed(scope, function(use)
+                return UDim2.fromScale(use(rootXOffset), 0)
+            end),
 
-			-- Animamos la posición del Root entero
-			Position = Computed(scope, function(use)
-				return UDim2.fromScale(use(rootXOffset), 0)
-			end),
+            [Children] = {
+                createContainer(scope),
 
-			[Children] = {
-				createContainer(scope),
+                CloseButton(scope, {
+                    onClose = closeStore,
+                }),
 
-				CloseButton(scope, {
-					onClose = closeStore,
-				}),
+                createNavSection(scope),
 
-				createNavSection(scope),
+                createTabs(scope),
 
-				-- Tabs
-				createTabs(scope),
+                -- FIX: Indentación corregida y estructuración limpia
+                ActionFrame(scope, {
+                    price = Computed(scope, function(use)
+                        local item = use(selectedItem)
+                        if not item then return "0" end
+                        local data = use(playerData)
+                        if ItemsDataUtils.isLevelLocked(item, data) then
+                            return "LEVEL " .. tostring(item.Level or 0)
+                        else
+                            return tostring(item.Price)
+                        end
+                    end),
+                    title = Computed(scope, function(use)
+                        local item = use(selectedItem)
+                        if not item then return "PURCHASE" end
+                        local data = use(playerData)
 
-				-- Action Frame (Purchase)
+                        if ItemsDataUtils.isLevelLocked(item, data) then return "LOCKED" end
 
-				-- Action Frame (Purchase)
-		ActionFrame(scope, {
-			price = Computed(scope, function(use)
-				local item = use(selectedItem)
-				if not item then return "0" end
+                        local currentOption = use(selectedOption)
+                        local isOwned = ItemsDataUtils.isItemOwned(data, currentOption, item.Name)
+                        return isOwned and "EQUIP" or "PURCHASE"
+                    end),
+                    isLocked = Computed(scope, function(use)
+                        local item = use(selectedItem)
+                        if not item then return false end
+                        local data = use(playerData)
+                        return ItemsDataUtils.isLevelLocked(item, data)
+                    end),
+                    isVisible = Computed(scope, function(use)
+                        local item = use(selectedItem)
+                        if not item then return false end
+                        local data = use(playerData)
 
-				local data = use(playerData)
-				if ItemsDataUtils.isLevelLocked(item, data) then
-					return "LEVEL " .. tostring(item.Level or 0)
-				else
-					return tostring(item.Price)
-				end
-			end),
-			title = Computed(scope, function(use)
-				local item = use(selectedItem)
-				if not item then return "PURCHASE" end
+                        if ItemsDataUtils.isLevelLocked(item, data) then return true end
 
-				local data = use(playerData)
+                        local currentOption = use(selectedOption)
+                        if ItemsDataUtils.isItemOwned(data, currentOption, item.Name) then
+                            return false
+                        end
+                        return true
+                    end),
+                    onPurchase = function()
+                        local item = peek(selectedItem)
+                        if not item then return end
 
-				if ItemsDataUtils.isLevelLocked(item, data) then
-					return "LOCKED"
-				end
+                        local tab = peek(selectedTab)
+                        local option = peek(selectedOption)
+                        local data = peek(playerData)
 
-				local currentOption = use(selectedOption)
-				local isOwned = ItemsDataUtils.isItemOwned(data, currentOption, item.Name)
+                        if ItemsDataUtils.isLevelLocked(item, data) then return end
+                        if ItemsDataUtils.isItemOwned(data, option, item.Name) then return end
 
-				return isOwned and "EQUIP" or "PURCHASE"
-			end),
-			isLocked = Computed(scope, function(use)
-				local item = use(selectedItem)
-				if not item then return false end
-
-				local data = use(playerData)
-				return ItemsDataUtils.isLevelLocked(item, data)
-			end),
-			isVisible = Computed(scope, function(use)
-				local item = use(selectedItem)
-				if not item then return false end
-
-				local data = use(playerData)
-
-				-- Show if locked (display LOCKED state)
-				if ItemsDataUtils.isLevelLocked(item, data) then
-					return true
-				end
-
-				-- Hide if owned (auto-equip handles it)
-				local currentOption = use(selectedOption)
-				if ItemsDataUtils.isItemOwned(data, currentOption, item.Name) then
-					return false
-				end
-
-				return true
-			end),
-			onPurchase = function()
-				local item = peek(selectedItem)
-				if item then
-					local data = peek(playerData)
-					local currentOption = peek(selectedOption)
-					local currentTab = peek(selectedTab)
-
-					-- Check Locked
-					if ItemsDataUtils.isLevelLocked(item, data) then
-						print("Item locked")
-						return
-					end
-
-					-- Check ownership
-					local isOwned = ItemsDataUtils.isItemOwned(data, currentOption, item.Name)
-
-					if isOwned then
-						-- EQUIP
-						if equipItemRF then
-							print("Equipping:", item.Name)
-							equipItemRF:InvokeServer(currentOption, item.Name)
-							selectedItem:set(nil)
-						else
-							warn("Remote EquipItem no encontrado")
-						end
-					else
-						-- PURCHASE
-						if buyItemRF then
-							local success, msg = buyItemRF:InvokeServer(currentTab, currentOption, item.Name)
-							if success then
-								print("Compra exitosa:", item.Name)
-								if equipItemRF then
-									equipItemRF:InvokeServer(currentOption, item.Name)
-								end
-
-								-- OPTIMISTIC UPDATE: Deep-clone nested tables to avoid mutation
-								local newData = table.clone(peek(playerData))
-								newData.inventory = table.clone(newData.inventory or {})
-								newData.inventory[currentOption] = table.clone(newData.inventory[currentOption] or {})
-								table.insert(newData.inventory[currentOption], item.Name)
-
-								newData.equipped = table.clone(newData.equipped or {})
-								newData.equipped[currentOption] = item.Name
-
-								playerData:set(newData)
-								selectedItem:set(nil)
-							else
-								warn("Error al comprar:", msg)
-							end
-						else
-							warn("Remote BuyItem no encontrado")
-						end
-					end
-				end
-			end
-		}),
-			}
-		}
-	},
+                        if buyItemRF then
+                            task.spawn(function()
+                                local success = buyItemRF:InvokeServer(tab, option, item.Name)
+                                if success then
+                                    print("[Locker] Comprado exitosamente:", item.Name)
+                                else
+                                    warn("[Locker] Fallo al comprar:", item.Name)
+                                end
+                            end)
+                        end
+                    end
+                }),
+            }
+        }
+    },
 }
 
 -- Abrir/cerrar con una tecla
 local UserInputService = game:GetService("UserInputService")
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.B then
-		toggleStore()
-		storeGui.Enabled = peek(isStoreOpen)
-	end
-end)
+table.insert(scope, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.B then
+        toggleStore()
+        -- FIX CRÍTICO: Eliminado 'storeGui.Enabled = peek(isStoreOpen)'.
+        -- Hacer esto rompía el 'Computed' de Fusion y mataba la reactividad de la GUI.
+    end
+end))
+
 print("[StoreUI] Cargado correctamente")

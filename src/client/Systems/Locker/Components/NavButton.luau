@@ -1,15 +1,9 @@
---[[
-	NavButton
-	Botón de opción de navegación para el Locker.
-	Muestra una imagen, título, y crece cuando está seleccionado.
+--!strict
 
-	Props:
-		name: string              — Nombre del botón
-		title: string             — Texto visible (ej. "Weapon Skins")
-		image: string             — Asset ID de la imagen
-		layoutOrder: number       — Orden en el layout
-		isSelected: StateObject   — Fusion state: true cuando está seleccionado
-		onClick: (() -> ())?      — Callback al hacer click
+--[[
+    NavButton
+    Botón de opción de navegación para el Locker.
+    Muestra una imagen, título, y crece hacia la izquierda cuando está seleccionado.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,54 +13,95 @@ local Children = Fusion.Children
 local OnEvent = Fusion.OnEvent
 local Computed = Fusion.Computed
 local Spring = Fusion.Spring
+local Value = Fusion.Value
 
 local Constants = require(script.Parent.StoreConstants)
 
-type NavButtonProps = {
-	name: string,
-	title: string,
-	image: string,
-	layoutOrder: number,
-	isSelected: Fusion.StateObject<boolean>,
-	onClick: (() -> ())?,
+export type NavButtonProps = {
+    name: string,
+    title: string,
+    image: string,
+    layoutOrder: number,
+    isSelected: Fusion.UsedAs<boolean>, -- Permite tanto boolean estáticos como estados reactivos
+    onClick: (() -> ())?,
 }
 
 local function NavButton(scope: Fusion.Scope<typeof(Fusion)>, props: NavButtonProps)
-    -- Animación de tamaño: crece cuando está seleccionado
-    local sizeSpring = Spring(scope, Computed(scope, function(use)
-        if use(props.isSelected) then
-            -- El crecimiento ahora se expandirá hacia la izquierda
-            return UDim2.fromScale(1.509, 1)
-        else
-            return UDim2.fromScale(1, 1)
-        end
-    end), 30, 0.7)
+
+    ---------------------------------------------------------------------------
+    -- Estado Reactivo
+    ---------------------------------------------------------------------------
+    local isSelectedState = Computed(scope, function(use)
+        if type(props.isSelected) == "table" then return use(props.isSelected) end
+        return props.isSelected or false
+    end)
+
+    local isHovered = Value(scope, false)
+    local isPressed = Value(scope, false)
 
     -- Color de fondo reactivo
     local backgroundColor = Computed(scope, function(use)
-        return use(props.isSelected) and Constants.Colors.NavOptionActive or Constants.Colors.TabInactive
+        return use(isSelectedState) and Constants.Colors.NavOptionActive or Constants.Colors.TabInactive
     end)
 
-    -- Wrapper Frame para mantener el layout
+    ---------------------------------------------------------------------------
+    -- Físicas de Animación Combinadas
+    ---------------------------------------------------------------------------
+    local targetSize = Computed(scope, function(use)
+        local selected = use(isSelectedState)
+
+        -- Multiplicador táctil para Hover y Click
+        local interactionScale = 1
+        if use(isPressed) then
+            interactionScale = 0.95
+        elseif use(isHovered) then
+            interactionScale = 1.05
+        end
+
+        -- Base dependiente de si está seleccionado (crece en X)
+        local baseWidth = selected and 1.509 or 1
+        local baseHeight = 1
+
+        return UDim2.fromScale(baseWidth * interactionScale, baseHeight * interactionScale)
+    end)
+
+    -- Un único resorte controla todas las transiciones (selección, hover, click)
+    local animatedSize = Spring(scope, targetSize, 30, 0.6)
+
+    ---------------------------------------------------------------------------
+    -- Renderizado del Componente
+    ---------------------------------------------------------------------------
     return scope:New "Frame" {
         Name = props.name .. "Wrapper",
         BackgroundTransparency = 1,
         LayoutOrder = props.layoutOrder,
+        -- El Wrapper mantiene el espacio reservado original en el layout
         Size = UDim2.fromScale(1, 0.301205),
 
         [Children] = {
             scope:New "ImageButton" {
                 Name = props.name,
-                -- CAMBIO AQUÍ: AnchorPoint en X = 1 (Derecha)
-                AnchorPoint = Vector2.new(1, 0.5),
+                AnchorPoint = Vector2.new(1, 0.5), -- Anclado a la derecha
                 AutoButtonColor = false,
                 BackgroundColor3 = backgroundColor,
                 Image = Constants.Assets.Placeholder,
                 ImageTransparency = 1,
-                -- CAMBIO AQUÍ: Posición en X = 1 para que pegue a la derecha del Wrapper
-                Position = UDim2.fromScale(1, 0.5),
-                Size = sizeSpring,
+                Position = UDim2.fromScale(1, 0.5), -- Pegado al borde derecho del Wrapper
+                Size = animatedSize,
 
+                -- Eventos de Interacción Reactivos
+                [OnEvent "MouseEnter"] = function() isHovered:set(true) end,
+                [OnEvent "MouseLeave"] = function() isHovered:set(false); isPressed:set(false) end,
+                [OnEvent "InputBegan"] = function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        isPressed:set(true)
+                    end
+                end,
+                [OnEvent "InputEnded"] = function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        isPressed:set(false)
+                    end
+                end,
                 [OnEvent "Activated"] = function()
                     if props.onClick then
                         props.onClick()
@@ -74,7 +109,6 @@ local function NavButton(scope: Fusion.Scope<typeof(Fusion)>, props: NavButtonPr
                 end,
 
                 [Children] = {
-                    -- El resto de los hijos se mantienen igual
                     scope:New "UICorner" { Name = "UICorner" },
 
                     scope:New "ImageLabel" {
