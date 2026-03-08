@@ -90,7 +90,9 @@ local EffectsManager = require(script.Parent.Modules.EffectsManager)
 local skinAnimationConnection: RBXScriptConnection? = nil
 
 local previewKillEffectDummy = Value(scope, nil)
-local killEffectDebounce = false
+local killEffectToken = 0 -- Incremented to cancel in-flight previews
+local killEffectLastTime = -math.huge -- Timestamp of last preview trigger (os.clock)
+local KILL_EFFECT_COOLDOWN = 1 -- seconds
 
 local function cleanupPreview()
 	local char = peek(previewCharacter)
@@ -186,23 +188,29 @@ local function spawnKillEffectDummy(forceRespawn)
 end
 
 local function playKillEffectPreview(effectItem)
-	if killEffectDebounce then return end
+	-- 1-second cooldown to prevent spam
+	local now = os.clock()
+	if now - killEffectLastTime < KILL_EFFECT_COOLDOWN then return end
+	killEffectLastTime = now
 
-	local dummy = peek(previewKillEffectDummy)
-	if not dummy then
-		dummy = spawnKillEffectDummy(true)
-	end
+	-- Cancel any in-flight preview by incrementing the token
+	killEffectToken += 1
+	local myToken = killEffectToken
 
+	-- Force-destroy the current dummy so we start clean immediately
+	local existing = peek(previewKillEffectDummy)
+	if existing then existing:Destroy(); previewKillEffectDummy:set(nil) end
+
+	-- Spawn a fresh dummy
+	local dummy = spawnKillEffectDummy(true)
 	if not dummy then return end
 
-	killEffectDebounce = true
-
-	-- 1. Apply Effect Logic (Placeholder / Asset lookup)
-    -- Assuming effects are particles/scripts in a folder or just a visual cue
+	-- 1. Apply Effect Logic
     print("Playing Kill Effect:", effectItem.Name)
 
 	-- Wait for character to be fully in workspace
 	task.wait()
+	if killEffectToken ~= myToken then return end -- cancelled
 
     local killEffectsFolder = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Systems") and ReplicatedStorage.Shared.Systems:FindFirstChild("Combat") and ReplicatedStorage.Shared.Systems.Combat:FindFirstChild("KillEffects")
     local effectTemplate = killEffectsFolder and killEffectsFolder:FindFirstChild(effectItem.Name)
@@ -213,7 +221,6 @@ local function playKillEffectPreview(effectItem)
 			effectModule.applyDefaultRagdoll(dummy)
 		end
     else
-        -- Fallback if no module found
         warn("KillEffect module not found for:", effectItem.Name)
     end
 
@@ -221,11 +228,13 @@ local function playKillEffectPreview(effectItem)
 	local humanoid = dummy:FindFirstChild("Humanoid")
 	if humanoid then
 		task.wait() -- Allow Died event to connect
+		if killEffectToken ~= myToken then return end -- cancelled
 		humanoid.Health = 0
 	end
 
 	-- 2. Wait
 	task.wait(2)
+	if killEffectToken ~= myToken then return end -- cancelled
 
 	-- 3. Fade Out
 	local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear)
@@ -242,17 +251,16 @@ local function playKillEffectPreview(effectItem)
     end
 
     task.wait(1)
+	if killEffectToken ~= myToken then return end -- cancelled
 
     -- 4. Cleanup and Respawn
-    if dummy then dummy:Destroy() end
+    if dummy and dummy.Parent then dummy:Destroy() end
     previewKillEffectDummy:set(nil)
 
-    -- Only respawn if the store is still OPEN
-    if peek(isStoreOpen) then
+    -- Only respawn if the store is still OPEN and we are still the active preview
+    if peek(isStoreOpen) and killEffectToken == myToken then
         spawnKillEffectDummy(true)
     end
-
-    killEffectDebounce = false
 end
 
 local function applySkin(weapon: Model, skinData: { [string]: any })
@@ -403,7 +411,6 @@ obsItem:onChange(function()
 			local char = spawnCharacter()
 			if char then OutfitApplier.Apply(char, item) end
 		elseif option == "KillEffects" then
-			spawnKillEffectDummy(false) -- Ensure dummy exists
 			task.spawn(function()
 				playKillEffectPreview(item)
 			end)
