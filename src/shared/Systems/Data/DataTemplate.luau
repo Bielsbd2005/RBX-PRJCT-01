@@ -19,6 +19,9 @@ local DataTemplate: ProfileData = {
 		playTime = 0,
 	},
 
+	-- Fusión en curso ({endTime: number, resultSkin: string, sourceSkins: {string}})
+	activeFusion = nil,
+
 	-- Inventario (Arrays de strings con nombres de items)
 	inventory = {
 		KillEffects = {},

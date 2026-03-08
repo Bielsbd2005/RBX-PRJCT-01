@@ -105,9 +105,9 @@ StoreConstants.RarityThemes = {
 		RarityStroke = Color3.fromRGB(114, 162, 220),
 	},
 	Common = {
-		Background   = Color3.fromRGB(202, 202, 202),
-		ImageColor   = Color3.fromRGB(229, 229, 229),
-		Stroke       = Color3.fromRGB(162, 162, 162),
+		Background   = Color3.fromRGB(204, 255, 102),
+		ImageColor   = Color3.fromRGB(153, 204, 102),
+		Stroke       = Color3.fromRGB(153, 204, 102),
 		RarityText   = Color3.new(1, 1, 1),
 		RarityStroke = Color3.fromRGB(143, 143, 143),
 	},

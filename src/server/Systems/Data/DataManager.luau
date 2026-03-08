@@ -14,7 +14,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local _RunService = game:GetService("RunService")
 
 -- Asegúrate de que los types estén bien definidos en tus módulos
 local ProfileStore = require(ReplicatedStorage.Packages.profilestore)
@@ -50,7 +50,7 @@ DataManager.IsInited = false
 --------------------------------------------------------------------------------
 
 -- Obtiene el valor actual para operaciones matemáticas (Increment)
-local function _getValueFromPath(data: table, keys: {string}): any
+local function _getValueFromPath(data: any, keys: {string}): any
 	local pointer = data
 	for _, key in ipairs(keys) do
 		if type(pointer) == "table" then
@@ -212,11 +212,16 @@ function DataManager:BatchUpdate(player: Player, updates: { [string]: any })
 	local profile = Profiles[player]
 	if not profile then return false end
 
+	local allOk = true
 	for path, value in pairs(updates) do
-		_applyChange(player, path, value, false)
+		local result = _applyChange(player, path, value, false)
+		if result == nil then
+			allOk = false
+			warn(string.format("[DataManager] BatchUpdate: failed to apply path '%s' for %s", path, player.Name))
+		end
 	end
 
-	return true
+	return allOk
 end
 
 function DataManager:GetReplica(player: Player)

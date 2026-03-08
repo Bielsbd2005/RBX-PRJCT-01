@@ -4,6 +4,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
+local RunService = game:GetService("RunService")
 
 -- Asumimos que DataManager está en esta ruta según tu script anterior
 local DataManager = require(ServerScriptService.Server.Systems.Data.DataManager)
@@ -17,10 +18,16 @@ local ADMIN_IDS: { [number]: boolean } = {
 	[286176976] = true,
 }
 
+-- ⚠️  Set to false before publishing to live game!
+local STUDIO_ADMIN_ENABLED = true
+
 ----- Utilidades -----
 
 -- Verificación instantánea sin bucles
 local function isAdmin(player: Player): boolean
+	if STUDIO_ADMIN_ENABLED and (RunService:IsStudio() or player.UserId < 0) then
+		return true
+	end
 	return ADMIN_IDS[player.UserId] == true
 end
 
@@ -98,6 +105,14 @@ updateDataRF.OnServerInvoke = function(player: Player, targetUserId: number, pat
 	if type(targetUserId) ~= "number" then return false, "UserId inválido" end
 	if type(path) ~= "string" or path == "" then return false, "Path inválido" end
 
+	-- Block writes to protected data paths
+	local BLOCKED_PATHS = { "meta.isBanned", "activeFusion", "meta.createdAt" }
+	for _, blocked in ipairs(BLOCKED_PATHS) do
+		if string.find(path, blocked, 1, true) then
+			return false, "Path protegido: " .. blocked
+		end
+	end
+
 	-- OPTIMIZACIÓN: Búsqueda nativa
 	local targetPlayer = Players:GetPlayerByUserId(targetUserId)
 	if not targetPlayer then return false, "Jugador no encontrado u offline" end
@@ -111,8 +126,9 @@ updateDataRF.OnServerInvoke = function(player: Player, targetUserId: number, pat
 	local finalVal = DataManager:Update(targetPlayer, path, newValue)
 
 	if finalVal ~= nil then
-		-- Logging simple para seguridad
-		print(string.format("[ADMIN] %s updated %s's path '%s'", player.Name, targetPlayer.Name, path))
+		-- Logging with trust source
+		local trust = (RunService:IsStudio() or player.UserId < 0) and "[ADMIN-STUDIO]" or "[ADMIN-TRUSTED]"
+		print(string.format("%s %s updated %s's path '%s'", trust, player.Name, targetPlayer.Name, path))
 		return true, "OK"
 	else
 		return false, "Error al actualizar (Path inválido?)"
