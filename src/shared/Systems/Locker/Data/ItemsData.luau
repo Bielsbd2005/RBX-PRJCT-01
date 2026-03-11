@@ -68,6 +68,9 @@ local ItemsData: { [string]: CategoryData } = {
 			{ Name = "Weapon",  Price = 7, Level = 7, Rarity = "Rare", Image = asset(76043980713122) },
 		},
 		WeaponSkins = {
+			-- Default (base skin, siempre disponible)
+			{ Name = "Default", Rarity = "Common" },
+
 			--Wood Case
 			{ Name = "SK_0001", Rarity = "Common", BaseColor = rgb(85, 107, 47) },
 			{ Name = "SK_0002", Rarity = "Common", BaseColor = rgb(153, 153, 102) },

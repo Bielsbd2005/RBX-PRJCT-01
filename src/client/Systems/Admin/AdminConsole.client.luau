@@ -20,7 +20,7 @@ local Value = Fusion.Value
 local Computed = Fusion.Computed
 local Spring = Fusion.Spring
 local peek = Fusion.peek
-local ForPairs = Fusion.ForPairs
+local _ForPairs = Fusion.ForPairs
 
 -- Jugador local
 local player = Players.LocalPlayer
@@ -85,7 +85,7 @@ local statusMessage = Value(scope, "")
 local statusColor = Value(scope, Colors.TextDim)
 
 -- Tracking de cambios pendientes
-local pendingChanges = {} -- { [path] = newValue }
+local _pendingChanges = {} -- { [path] = newValue }
 
 --------------------------------------------------------------------------------
 -- Funciones de datos
@@ -119,8 +119,11 @@ local function selectPlayer(userId: number, name: string)
 	statusMessage:set("Cargando datos...")
 	statusColor:set(Colors.Yellow)
 	loadPlayerData(userId)
-	statusMessage:set("Datos cargados")
-	statusColor:set(Colors.Green)
+	-- Solo mostrar éxito si los datos se cargaron correctamente
+	if peek(selectedPlayerData) ~= nil then
+		statusMessage:set("Datos cargados")
+		statusColor:set(Colors.Green)
+	end
 end
 
 local function saveChange(path: string, value: any)
@@ -1095,7 +1098,7 @@ local consoleYOffset = Spring(scope, Computed(scope, function(use)
 	return use(isConsoleOpen) and 0 or 1.2
 end), 25, 0.85)
 
-local consoleGui = scope:New "ScreenGui" {
+local _consoleGui = scope:New "ScreenGui" {
 	Name = "AdminConsole",
 	Parent = player.PlayerGui,
 	DisplayOrder = 100,
@@ -1193,7 +1196,7 @@ local consoleGui = scope:New "ScreenGui" {
 --------------------------------------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.T then
+	if input.KeyCode == Enum.KeyCode.F9 then
 		local willOpen = not peek(isConsoleOpen)
 		isConsoleOpen:set(willOpen)
 		if willOpen then
@@ -1205,4 +1208,4 @@ end)
 -- Cargar lista inicial
 refreshPlayerList()
 
-print("[AdminConsole] GUI de admin cargada — pulsa T para abrir")
+print("[AdminConsole] GUI de admin cargada — pulsa F9 para abrir")

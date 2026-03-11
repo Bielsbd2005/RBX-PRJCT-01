@@ -9,6 +9,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 -- Fusion 0.3 imports
 local Fusion = require(ReplicatedStorage.Packages.fusion)
 local scoped = Fusion.scoped
@@ -381,7 +382,6 @@ local function restorePreview()
 end
 
 -- Observar cambios en la selección
-local Observer = Fusion.Observer
 local obsItem = Observer(scope, selectedItem)
 obsItem:onChange(function()
 	local item = peek(selectedItem)
@@ -427,13 +427,19 @@ obsItem:onChange(function()
 			end
 
 			-- OPTIMISTIC UPDATE: Auto-equip locally immediately (deep-clone nested tables)
-			local newData = table.clone(peek(playerData))
+			local previousData = peek(playerData)
+			local newData = table.clone(previousData)
 			newData.equipped = table.clone(newData.equipped or {})
 			newData.equipped[option] = item.Name
 			playerData:set(newData)
 
 			task.spawn(function()
-				equipItemRF:InvokeServer(option, item.Name)
+				local success = equipItemRF:InvokeServer(option, item.Name)
+				if not success then
+					-- Revertir: la réplica del servidor corregirá vía OnRawChange,
+					-- pero forzamos revert inmediato para feedback instantáneo
+					playerData:set(previousData)
+				end
 			end)
 		end
 	else
@@ -617,9 +623,6 @@ end
 --------------------------------------------------------------------------------
 -- Grid de items (ScrollingFrame con tarjetas)
 --------------------------------------------------------------------------------
---------------------------------------------------------------------------------
--- Grid de items (ScrollingFrame con tarjetas)
---------------------------------------------------------------------------------
 
 local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 	-- playerData ya está definido arriba en scope principal
@@ -656,9 +659,10 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 
 			for _, item in optionData do
 				if ownedCount[item.Name] and ownedCount[item.Name] > 0 then
-					-- Guardamos la cantidad temporalmente para poder ordenarlo u usarlo luego
-					item._ownedCount = ownedCount[item.Name]
-					table.insert(filtered, item)
+					-- Clone para no mutar la tabla frozen de ItemsData
+					local cloned = table.clone(item)
+					cloned._ownedCount = ownedCount[item.Name]
+					table.insert(filtered, cloned)
 				end
 			end
 
@@ -719,17 +723,19 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 			PaddingTop = UDim.new(0, 15),
 		})
 
-		-- Helper para verificar propiedad
+		-- Helper para verificar propiedad (clonar items para no mutar tablas frozen)
+		local clonedItems = {}
 		for i, item in items do
 			local isOwned = ItemsDataUtils.isItemOwned(data, currentOption, item.Name)
 			local isEquipped = data.equipped and data.equipped[currentOption] == item.Name
 
-			-- Pre-calcular estado para ordenamiento estable luego si es necesario
-			item._isOwned = isOwned
-			item._isEquipped = isEquipped
+			local cloned = table.clone(item)
+			cloned._isOwned = isOwned
+			cloned._isEquipped = isEquipped
+			clonedItems[i] = cloned
 		end
 
-		-- Pesos de rareza (Mayor número = más arriba)
+		-- Pesos de rareza (constante reutilizada, sin realocación gracias al upvalue)
 		local RARITY_WEIGHTS = {
 			Legendary = 4,
 			Epic = 3,
@@ -738,7 +744,7 @@ local function createItemGrid(scope: Fusion.Scope<typeof(Fusion)>)
 		}
 
 		-- Clonar y ordenar
-		local sortedItems = table.clone(items)
+		local sortedItems = table.clone(clonedItems)
 		table.sort(sortedItems, function(a, b)
 			-- 1. Dueño primero
 			if a._isOwned ~= b._isOwned then
@@ -1125,7 +1131,6 @@ local storeGui = scope:New "ScreenGui" {
 }
 
 -- Abrir/cerrar con una tecla
-local UserInputService = game:GetService("UserInputService")
 
 table.insert(scope, UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
