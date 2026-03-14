@@ -147,9 +147,6 @@ resetDataRF.OnServerInvoke = function(player: Player, targetUserId: number)
 		DataManager:Update(targetPlayer, key, deepCopy(defaultValue))
 	end
 
-	-- Limpiar activeFusion explícitamente (es nil en el template, así que pairs() no lo cubre)
-	DataManager:Update(targetPlayer, "activeFusion", { cleared = true })
-
 	print(string.format("[ADMIN] %s RESET DATA for %s", player.Name, targetPlayer.Name))
 	return true, "Datos reseteados al default"
 end

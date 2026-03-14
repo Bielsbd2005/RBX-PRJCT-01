@@ -32,7 +32,7 @@ local DataController = require(ReplicatedStorage.Shared.Systems.Data.DataControl
 local BoxAnimation = require(ReplicatedStorage.Shared.Systems.Cases.BoxAnimation)
 local _LootRoller = require(ReplicatedStorage.Shared.Systems.Cases.LootRoller)
 local _SkinApplier = require(ReplicatedStorage.Shared.Systems.Appearance.SkinApplier)
-local ItemsDataUtils = require(ReplicatedStorage.Shared.Systems.Locker.Data.ItemsDataUtils)
+local ItemsData = require(ReplicatedStorage.Shared.Systems.Locker.Data.ItemsData)
 
 -- State Management
 local currentScope = nil
@@ -41,9 +41,16 @@ local closeCallback = nil
 local activeCleanup = nil -- Cleanup function from BoxAnimation
 local isUnboxing = false
 
--- Helper: buscar datos de skin por nombre usando cache O(1)
+-- Helper: buscar datos de skin por nombre en ItemsData
 local function findSkinData(skinName: string)
-	return ItemsDataUtils.findByName("Arsenal", "WeaponSkins", skinName)
+	local skins = ItemsData.Arsenal and ItemsData.Arsenal.WeaponSkins
+	if not skins then return nil end
+	for _, skinData in ipairs(skins) do
+		if skinData.Name == skinName then
+			return skinData
+		end
+	end
+	return nil
 end
 
 local CasesUI = {}
@@ -64,8 +71,7 @@ function CasesUI.mount(scope)
 		playerData:set(DataController:Get())
 	end)
 
-	-- FIX: Almacenar la conexión para limpieza automática al cerrar
-	local rawChangeConn = DataController:OnRawChange(function()
+	DataController:OnRawChange(function()
 		playerData:set(DataController:Get())
 		-- Resetear toggle de Lucky Spin si de repente nos quitan o ya no tenemos spins y estaba activado
 		local data = peek(playerData)
@@ -73,7 +79,6 @@ function CasesUI.mount(scope)
 			isLuckySpinEnabled:set(false)
 		end
 	end)
-	table.insert(scope, rawChangeConn)
 
 	-- Frame contenedor para los clovers (referencia directa)
 	local cloverSpawnFrame = scope:New "Frame" {

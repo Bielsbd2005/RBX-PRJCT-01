@@ -58,25 +58,17 @@ local function getTargetRarity(sourceRarity: string): string
     return NEXT_RARITY[string.lower(sourceRarity)] or "Rare"
 end
 
--- Pre-built rarity→skins map para O(1) lookups
-local RARITY_SKINS: { [string]: {string} } = {}
-local SKIN_EXISTS: { [string]: boolean } = {}
-
-if ItemsData.Arsenal and ItemsData.Arsenal.WeaponSkins then
-    for _, skin in ipairs(ItemsData.Arsenal.WeaponSkins) do
-        local rarity = string.lower(skin.Rarity or "common")
-        if not RARITY_SKINS[rarity] then
-            RARITY_SKINS[rarity] = {}
-        end
-        table.insert(RARITY_SKINS[rarity], skin.Name)
-        SKIN_EXISTS[skin.Name] = true
-    end
-end
-
 local function getRandomSkinOfRarity(targetRarity: string): string?
-    local pool = RARITY_SKINS[string.lower(targetRarity)]
-    if pool and #pool > 0 then
-        return pool[math.random(1, #pool)]
+    local possible = {}
+    if ItemsData.Arsenal and ItemsData.Arsenal.WeaponSkins then
+        for _, skin in ipairs(ItemsData.Arsenal.WeaponSkins) do
+            if string.lower(skin.Rarity) == string.lower(targetRarity) then
+                table.insert(possible, skin.Name)
+            end
+        end
+    end
+    if #possible > 0 then
+        return possible[math.random(1, #possible)]
     end
     return nil
 end
@@ -127,21 +119,15 @@ fusionActionRF.OnServerInvoke = function(player: Player, action: unknown, args: 
         local rarityMatch = nil
         local allMatch = true
         for _, skinName in ipairs(skinsToFuse) do
-            if not SKIN_EXISTS[skinName] then return { success = false, message = "Invalid skin: " .. skinName } end
-
-            -- Buscar rarity desde el mapa (O(1))
-            local foundRarity = nil
-            for rarity, skins in pairs(RARITY_SKINS) do
-                if table.find(skins, skinName) then
-                    foundRarity = rarity
-                    break
-                end
+            local foundInfo = nil
+            for _, info in ipairs(ItemsData.Arsenal.WeaponSkins) do
+                if info.Name == skinName then foundInfo = info; break end
             end
-            if not foundRarity then return { success = false, message = "Invalid skin: " .. skinName } end
+            if not foundInfo then return { success = false, message = "Invalid skin: " .. skinName } end
 
             if not rarityMatch then
-                rarityMatch = foundRarity
-            elseif foundRarity ~= rarityMatch then
+                rarityMatch = string.lower(foundInfo.Rarity)
+            elseif string.lower(foundInfo.Rarity) ~= rarityMatch then
                 allMatch = false
                 break
             end
@@ -196,7 +182,10 @@ fusionActionRF.OnServerInvoke = function(player: Player, action: unknown, args: 
             for _, skinName in ipairs(activeFusion.sourceSkins) do
                 if type(skinName) == "string" and skinName ~= "" then
                     -- Verify it's a real skin in ItemsData
-                    local valid = SKIN_EXISTS[skinName] == true
+                    local valid = false
+                    for _, info in ipairs(ItemsData.Arsenal.WeaponSkins) do
+                        if info.Name == skinName then valid = true; break end
+                    end
                     if valid then
                         table.insert(newInventory, skinName)
                     end
@@ -225,7 +214,7 @@ fusionActionRF.OnServerInvoke = function(player: Player, action: unknown, args: 
         end
         isCollecting[player] = true
 
-        if os.time() < (activeFusion.endTime or 0) then
+        if os.time() < activeFusion.endTime then
             isCollecting[player] = nil
             return { success = false, message = "Fusion is not ready yet!" }
         end

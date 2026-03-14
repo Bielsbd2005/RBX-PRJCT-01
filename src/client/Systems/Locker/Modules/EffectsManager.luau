@@ -17,7 +17,7 @@ local function getOrCreateFadeFrame()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = guiName
 	gui.IgnoreGuiInset = true
-	gui.DisplayOrder = 999 -- Por encima de todo (incluido AdminConsole)
+	gui.DisplayOrder = 100 -- Por encima de todo
 	gui.Parent = playerGui
 
 	local frame = Instance.new("Frame")

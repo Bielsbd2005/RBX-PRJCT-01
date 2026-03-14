@@ -9,12 +9,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataController = require(ReplicatedStorage.Shared.Systems.Data.DataController)
 DataController:Start()
 
--- Debug: escuchar cualquier cambio de datos (solo en Studio)
-local RunService = game:GetService("RunService")
-if RunService:IsStudio() then
-	DataController:OnRawChange(function(action, pathArray, ...)
-		print("[DataController Debug]", action, table.concat(pathArray, "."), ...)
-	end)
-end
+-- Debug: escuchar cualquier cambio de datos
+DataController:OnRawChange(function(action, pathArray, ...)
+	print("[DataController Debug]", action, table.concat(pathArray, "."), ...)
+end)
 
 print("[Client] Todos los módulos inicializados")

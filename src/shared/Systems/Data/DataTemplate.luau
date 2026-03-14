@@ -1,4 +1,4 @@
-local DataTemplate = {
+local DataTemplate: ProfileData = {
 	-- Versión del esquema de datos (Incrementar si haces cambios estructurales grandes)
 	SchemaVersion = 1,
 
@@ -58,8 +58,7 @@ local DataTemplate = {
 	},
 }
 
--- NOTA: No congelar DataTemplate. ProfileStore:Reconcile() puede asignar
--- referencias directas a sub-tablas del template. Si están frozen, cualquier
--- escritura posterior en los datos del jugador crashearía.
+-- OPTIMIZACIÓN DE SEGURIDAD:
+table.freeze(DataTemplate)
 
 return DataTemplate

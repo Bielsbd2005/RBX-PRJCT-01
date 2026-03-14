@@ -305,14 +305,6 @@ function BoxManager.iniciarSecuencia(modeloOriginal, skinData, onOrbitStart)
         if premio then premio:Destroy() end
         camera.FieldOfView = 70
         camera.CameraType = Enum.CameraType.Custom
-
-        -- Reset DOF effect
-        local Lighting = game:GetService("Lighting")
-        local dofEffect = Lighting:FindFirstChild("ShowcaseDOF")
-        if dofEffect then
-            dofEffect.Enabled = false
-            dofEffect.FarIntensity = 0
-        end
     end
 end
 

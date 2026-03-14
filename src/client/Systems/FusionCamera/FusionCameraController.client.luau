@@ -27,7 +27,7 @@ local Observer = Fusion.Observer
 local CameraManager = require(ReplicatedStorage.Shared.Systems.Camera.CameraManager)
 local EffectsManager = require(script.Parent.Parent.Locker.Modules.EffectsManager)
 local SkinApplier = require(ReplicatedStorage.Shared.Systems.Appearance.SkinApplier)
-local ItemsDataUtils = require(ReplicatedStorage.Shared.Systems.Locker.Data.ItemsDataUtils)
+local _ItemsDataUtils = require(ReplicatedStorage.Shared.Systems.Locker.Data.ItemsDataUtils)
 local ItemsData = require(ReplicatedStorage.Shared.Systems.Locker.Data.ItemsData)
 local BoxAnimation = require(ReplicatedStorage.Shared.Systems.Cases.BoxAnimation)
 local DataController = require(ReplicatedStorage.Shared.Systems.Data.DataController)
@@ -114,82 +114,62 @@ local function rotar(modelo, velocidad, eje, dt)
     end
 end
 
--- Constante compartida para la rareza siguiente
-local NEXT_RARITY = {
-    common = "Rare",
-    rare = "Epic",
-    epic = "Legendary",
-    legendary = "Legendary",
-}
-
 task.spawn(function()
-    local lastTime = os.clock()
-
-    -- Cache de referencias del planetario (evita FindFirstChild cada frame)
-    local planetarium = nil
-    local rings = {} -- { r1, r2, r3, r4, r0, gear }
-    local timerSurfaceGui = nil
-
-    local function cachePlanetarium()
-        local fusionWS = Workspace:FindFirstChild("Fusion")
-        local planet = fusionWS and fusionWS:FindFirstChild("Planetarium")
-        local gears = planet and planet:FindFirstChild("Gears")
-        if gears then
-            planetarium = planet
-            rings.r1 = gears:FindFirstChild("Ring1")
-            rings.r2 = gears:FindFirstChild("Ring2")
-            rings.r3 = gears:FindFirstChild("Ring3")
-            rings.r4 = gears:FindFirstChild("Ring4")
-            rings.r0 = gears:FindFirstChild("Ring0")
-            rings.gear = gears:FindFirstChild("Gear")
-
-            local timerModel = planet:FindFirstChild("Timer")
-            local screen = timerModel and timerModel:FindFirstChild("Screen")
-            local sg = screen and screen:FindFirstChild("SurfaceGui")
-            timerSurfaceGui = sg and sg:FindFirstChild("Timer") and sg or nil
-        else
-            planetarium = nil
-        end
-    end
-
+    local lastTime = tick()
     while true do
         RunService.Heartbeat:Wait()
-        local now = os.clock()
+        local now = tick()
         local dt = now - lastTime
         lastTime = now
 
         currentTime:set(os.time())
 
-        -- Lazy-cache planetarium refs (re-fetch if lost)
-        if not planetarium then cachePlanetarium() end
-
         -- Si la fusión está en curso, aplica la rotación planetaria
         if peek(isFusing) then
+            local planetarium = Workspace:FindFirstChild("Fusion") and Workspace.Fusion:FindFirstChild("Planetarium") and Workspace.Fusion.Planetarium:FindFirstChild("Gears")
             if planetarium then
-                rotar(rings.r1, velR1, Vector3.new(0, 1, 0), dt)
-                rotar(rings.r2, velR2, Vector3.new(0, 1, 0), dt)
-                rotar(rings.r3, velR3, Vector3.new(1, 0, 0), dt)
-                rotar(rings.r4, velR4, Vector3.new(1, 0, 0), dt)
-                rotar(rings.gear, velGear, Vector3.new(0, 1, 0), dt)
-                rotar(rings.r0, velR0, Vector3.new(0, 1, 0), dt)
+                local r1 = planetarium:FindFirstChild("Ring1")
+                local r2 = planetarium:FindFirstChild("Ring2")
+                local r3 = planetarium:FindFirstChild("Ring3")
+                local r4 = planetarium:FindFirstChild("Ring4")
+                local r0 = planetarium:FindFirstChild("Ring0")
+                local gear = planetarium:FindFirstChild("Gear")
+
+                rotar(r1, velR1, Vector3.new(0, 1, 0), dt)
+                rotar(r2, velR2, Vector3.new(0, 1, 0), dt)
+                rotar(r3, velR3, Vector3.new(1, 0, 0), dt)
+                rotar(r4, velR4, Vector3.new(1, 0, 0), dt)
+                rotar(gear, velGear, Vector3.new(0, 1, 0), dt)
+                rotar(r0, velR0, Vector3.new(0, 1, 0), dt)
 
                 -- Update 3D Timer
-                if timerSurfaceGui and timerSurfaceGui:FindFirstChild("Timer") then
-                    local diff = peek(fusionEndTime) - os.time()
-                    if diff > 0 then
-                        local m = math.floor(diff / 60)
-                        local s = diff % 60
-                        timerSurfaceGui.Timer.Text = string.format("%02d:%02d", m, s)
-                    else
-                        timerSurfaceGui.Timer.Text = "READY"
+                local timerModel = planetarium.Parent and planetarium.Parent:FindFirstChild("Timer")
+                if timerModel and timerModel:FindFirstChild("Screen") then
+                    local surfaceGui = timerModel.Screen:FindFirstChild("SurfaceGui")
+                    if surfaceGui and surfaceGui:FindFirstChild("Timer") then
+                        local diff = peek(fusionEndTime) - os.time()
+                        if diff > 0 then
+                            local m = math.floor(diff / 60)
+                            local s = diff % 60
+                            surfaceGui.Timer.Text = string.format("%02d:%02d", m, s)
+                        else
+                            surfaceGui.Timer.Text = "READY"
+                        end
                     end
                 end
             end
         else
             -- Not fusing, zero the timer
-            if timerSurfaceGui and timerSurfaceGui:FindFirstChild("Timer") then
-                if timerSurfaceGui.Timer.Text ~= "00:00" then
-                    timerSurfaceGui.Timer.Text = "00:00"
+            local planetarium = Workspace:FindFirstChild("Fusion") and Workspace.Fusion:FindFirstChild("Planetarium")
+            if planetarium then
+                local timerModel = planetarium:FindFirstChild("Timer")
+                if timerModel and timerModel:FindFirstChild("Screen") then
+                    local surfaceGui = timerModel.Screen:FindFirstChild("SurfaceGui")
+                    if surfaceGui and surfaceGui:FindFirstChild("Timer") then
+                        if surfaceGui.Timer.Text ~= "00:00" then
+                            surfaceGui.Timer.Text = "00:00"
+                        end
+                    end
                 end
             end
         end
@@ -197,7 +177,12 @@ task.spawn(function()
 end)
 
 local function findSkinDataByName(name)
-    return ItemsDataUtils.findByName("Arsenal", "WeaponSkins", name)
+    if ItemsData.Arsenal and ItemsData.Arsenal.WeaponSkins then
+        for _, skin in ipairs(ItemsData.Arsenal.WeaponSkins) do
+            if skin.Name == name then return skin end
+        end
+    end
+    return nil
 end
 
 local isFull = Computed(scope, function(use)
@@ -229,14 +214,25 @@ local targetRarityTheme = Computed(scope, function(use)
             local firstSkin = findSkinDataByName(info.sourceSkins[1])
             if firstSkin then
                 local srcRarity = string.lower(firstSkin.Rarity or "common")
-                local target = NEXT_RARITY[srcRarity] or "Common"
+                local nextRarities = {
+                    common = "Rare", rare = "Epic",
+                    epic = "Legendary", legendary = "Legendary",
+                }
+                local target = nextRarities[srcRarity] or "Common"
                 return Constants.getTheme(target)
             end
         end
         return nil
     end
 
-    local target = NEXT_RARITY[match]
+    local nextRarities = {
+        common = "Rare",
+        rare = "Epic",
+        epic = "Legendary",
+        -- Max rarity reached, no target
+    }
+
+    local target = nextRarities[match]
     if not target then return nil end
     return Constants.getTheme(target)
 end)

@@ -79,8 +79,8 @@ local LootConfig: LootConfigDatabase = {
         Pools = {
             Common    = {"SK_0001","SK_0002","SK_0003","SK_0004","SK_0005","SK_0006","SK_0007","SK_0008","SK_0009","SK_0010","SK_0011","SK_0012"},
             Rare      = {"SK_0013","SK_0014","SK_0015","SK_0016","SK_0017","SK_0018"},
-            Epic      = {"SK_0019","SK_0020","SK_0021"},
-            Legendary = {"SK_0022"},
+            Epic      = {"SK_0013","SK_0014","SK_0015"},
+            Legendary = {"SK_0016"},
         },
     },
     ["Metal"] = {
@@ -106,8 +106,8 @@ local LootConfig: LootConfigDatabase = {
         Pools = {
             Common    = {"SK_0001","SK_0002","SK_0003","SK_0004","SK_0005","SK_0006","SK_0007","SK_0008","SK_0009","SK_0010","SK_0011","SK_0012"},
             Rare      = {"SK_0013","SK_0014","SK_0015","SK_0016","SK_0017","SK_0018"},
-            Epic      = {"SK_0019","SK_0020","SK_0021"},
-            Legendary = {"SK_0022"},
+            Epic      = {"SK_0013","SK_0014","SK_0015"},
+            Legendary = {"SK_0016"},
         },
     },
     ["Magma"] = {
@@ -118,18 +118,17 @@ local LootConfig: LootConfigDatabase = {
         Thumb = asset(125156836268515),
         LuckySpin = false,
 
-        -- Magma no tiene skins Epic/Legendary propias, se redistribuyen a Common/Rare
         Chances = {
-            Common    = 73,
-            Rare      = 27,
-            Epic      = 0,
-            Legendary = 0,
+            Common    = 68,
+            Rare      = 22,
+            Epic      = 9,
+            Legendary = 1,
         },
         -- No LuckyChances porque LuckySpin = false
 
         Pools = {
             Common    = {"SK_0001","SK_0002","SK_0003","SK_0004","SK_0005","SK_0006"},
-            Rare      = {"SK_000X"},
+            Rare      = {"SK_0002"},
             Epic      = {},
             Legendary = {},
         },

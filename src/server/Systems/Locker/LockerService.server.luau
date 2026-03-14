@@ -68,21 +68,11 @@ end
 -- Asegura que el path al inventario exista para evitar errores en jugadores nuevos
 local function _ensureInventoryTable(player: Player, data: any, category: string): {string}
 	if not data.inventory then
-		-- Crear inventario base con la categoría incluida
-		DataManager:Update(player, "inventory", { [category] = {} })
-		-- Re-leer datos actualizados desde DataManager
-		local freshData = DataManager:Get(player)
-		return freshData and freshData.inventory and freshData.inventory[category] or {}
+		-- Si no existe inventario, lo creamos en el DataManager
+		DataManager:Update(player, "inventory", {})
+		data.inventory = {}
 	end
-
-	if not data.inventory[category] then
-		-- La categoría no existe, crearla
-		DataManager:Update(player, "inventory." .. category, {})
-		local freshData = DataManager:Get(player)
-		return freshData and freshData.inventory and freshData.inventory[category] or {}
-	end
-
-	return data.inventory[category]
+	return data.inventory[category] or {}
 end
 
 --------------------------------------------------------------------------------

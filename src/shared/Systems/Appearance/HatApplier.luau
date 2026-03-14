@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HatsFolder = ReplicatedStorage.Shared.Systems.Locker:WaitForChild("Hats")
 
 local HatApplier = {}
+local Debris = game:GetService("Debris")
 
 function HatApplier.Clear(character)
     for _, child in ipairs(character:GetChildren()) do

@@ -112,19 +112,6 @@ local function _applyChange(player: Player, path: string, newValue: any, isIncre
 	return finalValue
 end
 
--- Actualiza meta.updatedAt tras cualquier cambio
-local function _touchUpdatedAt(player: Player)
-	local profile = Profiles[player]
-	if profile and profile.Data and profile.Data.meta then
-		local replica = Replicas[player]
-		if replica then
-			replica:SetValue({"meta", "updatedAt"}, os.time())
-		else
-			profile.Data.meta.updatedAt = os.time()
-		end
-	end
-end
-
 --------------------------------------------------------------------------------
 -- Gestión de Perfiles
 --------------------------------------------------------------------------------
@@ -199,17 +186,6 @@ function DataManager:Start()
 			profile:EndSession()
 		end
 	end)
-
-	-- CRÍTICO: Guardar todos los perfiles al apagar el servidor
-	-- PlayerRemoving NO se dispara en shutdowns/updates del servidor
-	game:BindToClose(function()
-		for _, player in ipairs(Players:GetPlayers()) do
-			local profile = Profiles[player]
-			if profile then
-				profile:EndSession()
-			end
-		end
-	end)
 end
 
 function DataManager:Get(player: Player)
@@ -218,19 +194,11 @@ function DataManager:Get(player: Player)
 end
 
 function DataManager:Update(player: Player, path: string, value: any)
-	local result = _applyChange(player, path, value, false)
-	if result ~= nil then
-		_touchUpdatedAt(player)
-	end
-	return result
+	return _applyChange(player, path, value, false)
 end
 
 function DataManager:Increment(player: Player, path: string, amount: number)
-	local result = _applyChange(player, path, nil, true, amount)
-	if result ~= nil then
-		_touchUpdatedAt(player)
-	end
-	return result
+	return _applyChange(player, path, nil, true, amount)
 end
 
 --[[
@@ -244,32 +212,6 @@ function DataManager:BatchUpdate(player: Player, updates: { [string]: any })
 	local profile = Profiles[player]
 	if not profile then return false end
 
-	-- Fase 1: Validar que todos los paths sean resolubles antes de aplicar
-	for path, _ in pairs(updates) do
-		local keys = string.split(path, ".")
-		if #keys > 1 then
-			local pointer = profile.Data
-			local valid = true
-			for i = 1, #keys - 1 do
-				if type(pointer) ~= "table" or (pointer[keys[i]] == nil and type(pointer[keys[i]]) ~= "table") then
-					-- El path intermedio no existe — intentamos crearlo
-					if type(pointer) == "table" and pointer[keys[i]] == nil then
-						-- Se creará automáticamente, es un path nuevo válido
-						break
-					end
-					valid = false
-					break
-				end
-				pointer = pointer[keys[i]]
-			end
-			if not valid then
-				warn(string.format("[DataManager] BatchUpdate: invalid path '%s' for %s — aborting batch", path, player.Name))
-				return false
-			end
-		end
-	end
-
-	-- Fase 2: Aplicar todos los cambios
 	local allOk = true
 	for path, value in pairs(updates) do
 		local result = _applyChange(player, path, value, false)
@@ -277,10 +219,6 @@ function DataManager:BatchUpdate(player: Player, updates: { [string]: any })
 			allOk = false
 			warn(string.format("[DataManager] BatchUpdate: failed to apply path '%s' for %s", path, player.Name))
 		end
-	end
-
-	if allOk then
-		_touchUpdatedAt(player)
 	end
 
 	return allOk
